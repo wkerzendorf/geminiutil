@@ -88,17 +88,25 @@ class Program(Base):
         self.name = name
         self.description = description
 
+    def __repr__(self):
+        return '<Gemini Program %s>' % self.name
+
 class Observation(Base):
     __tablename__ = 'observation'
 
     id = Column(Integer, primary_key=True)
+    program_id = Column(Integer, ForeignKey('program.id'))
     name = Column(String)
     description = Column(String)
 
+    program = relationship('Program')
 
     def __init__(self, name, description=None):
         self.name = name
         self.description = description
+
+    def __repr__(self):
+        return '<Gemini Observation %s>' % self.name
 
 
 class ObservationType(Base):
@@ -136,8 +144,11 @@ class Instrument(Base):
         self.name = name
         self.description = description
 
-def GeminiRawFITS(Base):
+class GeminiRawFITS(Base):
     __tablename__ = 'raw_fits_file'
+
+    id = Column(Integer, primary_key=True)
+    program_id = Column(Integer, ForeignKey('Program.id'))
 
 
 
