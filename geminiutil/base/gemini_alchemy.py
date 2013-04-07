@@ -4,6 +4,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, relationship, backref
 from sqlalchemy import Column, ForeignKey
 
+from astropy.io import fits
+
+
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float, DateTime
 
@@ -12,13 +15,37 @@ import numpy as np
 from astropy.io import fits
 import abc
 import os
+import hashlib
+
+def hashfile(afile, hasher, blocksize=65536):
+    buf = afile.read(blocksize)
+    while len(buf) > 0:
+        hasher.update(buf)
+        buf = afile.read(blocksize)
+    return hasher.hexdigest()
 
 Base = declarative_base()
 
 
-class FitsFile(object):
-    #__metaclass__ = abc.ABCMeta
+class FitsFile(Base):
+    __tablename__ = 'base_fits'
 
+    id = Column(Integer, primary_key=True)
+    fname = Column(String)
+    path = Column(String)
+    size = Column(Integer)
+    extensions = Column(Integer)
+    md5 = Column(String)
+
+    @classmethod
+    def from_fits_file(cls, fname):
+        extensions = len(fits.open(fname))
+        filename = os.path.basename(fname)
+        path = os.path.abspath(os.path.dirname(fname))
+        filesize = os.path.getsize(fname)
+        md5_hash = hashfile(file(fname, 'rb'), hashlib.md5())
+
+        return cls(filename, path, filesize, md5_hash, extensions)
 
 
     @property
@@ -42,6 +69,13 @@ class FitsFile(object):
     def shape(self):
         return self.header['naxis1'], self.header['naxis2']
 
+    def __init__(self, fname, path, size, md5, extensions):
+        self.fname = fname
+        self.path = path
+        self.size = size
+        self.md5 = md5
+        self.extensions = extensions
+
 
 class Program(Base):
     __tablename__ = 'program'
@@ -54,15 +88,40 @@ class Program(Base):
         self.name = name
         self.description = description
 
-class ObservationBlock(Base):
-    __tablename__ = 'observation_block'
+class Observation(Base):
+    __tablename__ = 'observation'
 
     id = Column(Integer, primary_key=True)
     name = Column(String)
     description = Column(String)
 
-    def __init__(self, description):
+
+    def __init__(self, name, description=None):
+        self.name = name
         self.description = description
+
+
+class ObservationType(Base):
+    __tablename__ = 'observation_type'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String)
+
+    def __init__(self, name, description=None):
+        self.description = description
+
+class ObservationClass(Base):
+    __tablename__ = 'observation_class'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String)
+
+    def __init__(self, name, description=None):
+        self.description = description
+
+
 
 
 
@@ -77,41 +136,9 @@ class Instrument(Base):
         self.name = name
         self.description = description
 
-class GenericGeminiFITS(Base, FitsFile):
-    __tablename__ = 'eso_raw_fits'
+def GeminiRawFITS(Base):
+    __tablename__ = 'raw_fits_file'
 
-    id = Column(Integer, primary_key=True)
-    program_id = Column(Integer, ForeignKey('program.id'))
-    observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
-    instrument_id = Column(Integer, ForeignKey('instrument.id'))
-    date_obs = Column(DateTime)
-    fname = Column(String)
-    path = Column(String)
-
-    observation_block = relationship(ObservationBlock)
-
-
-    def __init__(self, program_id, observation_block_id, template_id, instrument_id, date_obs, fname, path):
-        self.program_id = program_id
-        self.observation_block_id = observation_block_id
-        self.instrument_id = instrument_id
-        self.date_obs = date_obs
-        self.fname = fname
-        self.path = path
-
-    def __repr__(self):
-        try:
-            template_name = self.template.name
-        except:
-            template_name = 'N/A'
-
-        try:
-            obs_block_id = self.observation_block.id
-        except:
-            obs_block_id = 'N/A'
-
-
-        return "<Gemini FITS Obsblock %s Date-Obs %s>" % (obs_block_id, self.date_obs)
 
 
 

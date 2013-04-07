@@ -1,1 +1,1 @@
-__author__ = 'wkerzend'
+from .gemini_alchemy import FitsFile, Base
