@@ -8,7 +8,7 @@ from astropy.io import fits
 
 
 #sqlalchemy types
-from sqlalchemy import String, Integer, Float, DateTime
+from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
 from glob import glob
 import numpy as np
@@ -36,6 +36,7 @@ class FitsFile(Base):
     size = Column(Integer)
     extensions = Column(Integer)
     md5 = Column(String)
+    scanned = Column(Boolean)
 
     @classmethod
     def from_fits_file(cls, fname):
@@ -91,8 +92,8 @@ class Program(Base):
     def __repr__(self):
         return '<Gemini Program %s>' % self.name
 
-class Observation(Base):
-    __tablename__ = 'observation'
+class ObservationBlock(Base):
+    __tablename__ = 'observation_block'
 
     id = Column(Integer, primary_key=True)
     program_id = Column(Integer, ForeignKey('program.id'))
@@ -106,7 +107,7 @@ class Observation(Base):
         self.description = description
 
     def __repr__(self):
-        return '<Gemini Observation %s>' % self.name
+        return '<Gemini Observation Block %s>' % self.name
 
 
 class ObservationType(Base):
@@ -117,7 +118,12 @@ class ObservationType(Base):
     description = Column(String)
 
     def __init__(self, name, description=None):
+        self.name = name
         self.description = description
+
+    def __repr__(self):
+        return '<Gemini Observation Type %s>' % self.name
+
 
 class ObservationClass(Base):
     __tablename__ = 'observation_class'
@@ -127,10 +133,11 @@ class ObservationClass(Base):
     description = Column(String)
 
     def __init__(self, name, description=None):
+        self.name = name
         self.description = description
 
-
-
+    def __repr__(self):
+        return '<Gemini Observation Class %s>' % self.name
 
 
 class Instrument(Base):
@@ -144,11 +151,41 @@ class Instrument(Base):
         self.name = name
         self.description = description
 
+    def __repr__(self):
+        return "<Gemini Instrument %s>" % self.name
+
 class GeminiRawFITS(Base):
     __tablename__ = 'raw_fits_file'
 
-    id = Column(Integer, primary_key=True)
-    program_id = Column(Integer, ForeignKey('Program.id'))
+    id = Column(Integer, ForeignKey('base_fits.id'), primary_key=True)
+    date_obs = Column(DateTime)
+    instrument_id = Column(Integer, ForeignKey('instrument.id'))
+    observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
+    observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
+    observation_type_id = Column(Integer, ForeignKey('observation_type.id'))
+
+
+    fits = relationship(FitsFile, uselist=False, backref='raw_fits')
+    instrument = relationship(Instrument, uselist=False, backref='raw_fits')
+    observation_block = relationship(ObservationBlock, uselist=False, backref='raw_fits')
+    observation_class = relationship(ObservationClass, uselist=False, backref='raw_fits')
+    observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
+
+
+
+    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id):
+        self.date_obs = date_obs
+        self.instrument_id = instrument_id
+        self.observation_block_id = observation_block_id
+        self.observation_class_id = observation_class_id
+        self.observation_type_id = observation_type_id
+
+    def __repr__(self):
+        return "<raw FITS Instrument %s Block %s Class %s Type %s>" % (self.instrument.name, self.observation_block.name,
+                                    self.observation_class.name, self.observation_type.name)
+
+
+
 
 
 
