@@ -98,7 +98,7 @@ class GMOSMOSProject(BaseProject):
                 logger.warn('Mask %s is duplicate in the database - please check', mask_name)
                 continue
             else:
-                logger.info('Linking with %s with mask %s', gmos_raw.fits.fname, mask_name)
+                logger.info('Linking %s with mask %s', gmos_raw.fits.fname, mask_name)
                 mask = self.session.query(GMOSMask).filter_by(name=mask_name.strip().lower()).one()
                 gmos_raw.mask_id = mask.id
 
