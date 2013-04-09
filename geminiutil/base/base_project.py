@@ -30,6 +30,8 @@ class BaseProject(object):
         self.Session = sessionmaker(bind=self.engine)
         self.session = self.Session()
 
+        self.raw_fits_class = raw_fits_class
+
 
 
     def add_directory(self, directory, file_filter='*.fits'):

@@ -14,6 +14,10 @@ class GMOSMask(Base):
     name = Column(String)
     program_id = Column(Integer, ForeignKey('program.id'))
 
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        pass
+
 
     def __init__(self, name, program_id):
         self.name = name
@@ -41,7 +45,7 @@ class GMOSMOSRawFITS(Base):
     observation_class = relationship(ObservationClass, uselist=False, backref='raw_fits')
     observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
 
-    def __init(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id, mask_id, object_id, exclude=False,):
+    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id, mask_id, object_id, exclude=False,):
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id

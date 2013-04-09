@@ -35,16 +35,16 @@ class CategoryBaseClass(object):
     def from_fits_object(cls, fits_object):
         session = object_session(fits_object)
         category_keyword_value = fits_object.header[cls.category_keyword].lower().strip()
-        if session.query(Object).filter_by(name=category_keyword_value).count() == 0:
-            logger.info('Object %s mentioned in %s not found in database - adding', object_name, fits_object.fname)
-            new_object = cls(category_keyword_value, None, None)
-            session.add(new_object)
+        if session.query(cls).filter_by(name=category_keyword_value).count() == 0:
+            logger.info('%s %s mentioned in %s not found in database - adding', cls.__name__ , category_keyword_value, fits_object.fname)
+            new_category_object = cls(category_keyword_value)
+            session.add(new_category_object)
             session.commit()
-            return new_object
+            return new_category_object
         else:
-            object = session.query(Object).filter_by(name=category_keyword_value).one()
-            logger.debug('Object %s mentioned in %s found in database - returning existing object %s')
-            return object
+            category_object = session.query(cls).filter_by(name=category_keyword_value).one()
+            logger.debug('%s %s mentioned in %s found in database - returning existing object %s', cls.__name__ , category_keyword_value, fits_object.fname, category_object)
+            return category_object
 
 
 
@@ -128,7 +128,7 @@ class Object(Base, CategoryBaseClass):
     category_keyword = 'object'
 
 
-    def __init__(self, name, ra, dec, description=None):
+    def __init__(self, name, ra=None, dec=None, description=None):
         self.name = name
         self.ra = ra
         self.dec = dec
@@ -200,22 +200,6 @@ class Instrument(Base, CategoryBaseClass):
     description = Column(String)
 
     category_keyword = 'instrume'
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        instrument = fits_object.header['instrume'].lower().strip()
-        if session.query(Object).filter_by(name=instrument).count() == 0:
-            logger.info('Observation block %s mentioned in %s not found in database - adding', instrument, fits_object.fname)
-            new_object = cls(instrument)
-            session.add(new_object)
-            session.commit()
-            return new_object
-        else:
-            object = session.query(Object).filter_by(name=instrument).one()
-            logger.debug('Object %s mentioned in %s found in database - returning existing object %s')
-            return object
-
 
     def __init__(self, name, description=None):
         self.name = name
