@@ -34,9 +34,14 @@ class BaseProject(object):
             current_fits = FitsFile.from_fits_file(fname)
             self.session.add(current_fits)
             self.session.commit()
-            self.add_gemini_raw_fits(current_fits)
+            self.classify_added_fits(current_fits)
 
         self.session.commit()
+
+    def classify_added_fits(self, current_fits):
+        fits_object = self.add_gemini_raw_fits(current_fits)
+
+
 
     def add_gemini_raw_fits(self, fits_file):
         necesarry_keywords = ['instrume', 'object', 'obstype', 'obsclass', 'gemprgid', 'obsid', 'date-obs', 'time-obs']
@@ -74,6 +79,7 @@ class BaseProject(object):
         self.session.add(current_raw_fits)
 
         self.session.commit()
+        return current_raw_fits
 
 
 

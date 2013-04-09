@@ -154,7 +154,7 @@ class Instrument(Base):
     def __repr__(self):
         return "<Gemini Instrument %s>" % self.name
 
-class GeminiRawFITS(Base):
+class GeminiRawFITS(object):
     __tablename__ = 'raw_fits_file'
 
     id = Column(Integer, ForeignKey('base_fits.id'), primary_key=True)
@@ -163,6 +163,7 @@ class GeminiRawFITS(Base):
     observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
     observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
     observation_type_id = Column(Integer, ForeignKey('observation_type.id'))
+    exclude = Column(Boolean)
 
 
     fits = relationship(FitsFile, uselist=False, backref='raw_fits')
