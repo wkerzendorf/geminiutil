@@ -1,10 +1,13 @@
-from .gemini_alchemy import Base, FitsFile, Instrument, Program, ObservationBlock, ObservationClass, ObservationType
+from .gemini_alchemy import Base, FITSFile, Instrument, Program, ObservationBlock, ObservationClass, ObservationType
 
 from sqlalchemy import engine, create_engine
-from sqlalchemy.orm import sessionmaker, backref, relationship
+from sqlalchemy.orm import sessionmaker, backref, relationship, object_session
 from datetime import datetime
 from glob import glob
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_category(session, category_str, category):
@@ -31,8 +34,8 @@ class BaseProject(object):
 
     def add_directory(self, directory, file_filter='*.fits'):
         for fname in glob(os.path.join(directory, file_filter)):
-            print 'Adding %s' % fname
-            current_fits = FitsFile.from_fits_file(fname)
+            logger.info('Adding %s to project', fname)
+            current_fits = FITSFile.from_fits_file(fname)
             self.session.add(current_fits)
             self.session.commit()
             self.classify_added_fits(current_fits)
@@ -41,16 +44,14 @@ class BaseProject(object):
 
     def classify_added_fits(self, current_fits):
         fits_object = self.add_gemini_raw_fits(current_fits)
+        return fits_object
 
 
 
     def add_gemini_raw_fits(self, fits_file):
-        necesarry_keywords = ['instrume', 'object', 'obstype', 'obsclass', 'gemprgid', 'obsid', 'date-obs', 'time-obs']
+        necessary_keywords = ['instrume', 'object', 'obstype', 'obsclass', 'gemprgid', 'obsid', 'date-obs', 'time-obs']
 
         #print "Working on %s" % fits_file.fname
-        if not all([keyword in fits_file.header for keyword in necesarry_keywords]):
-            print "%s is not a normal raw gemini fits file" % fits_file.fname
-            return
 
         instrument_str = fits_file.header['instrume'].lower().strip()
         current_instrument = get_category(self.session, instrument_str, Instrument)
@@ -74,7 +75,7 @@ class BaseProject(object):
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        current_raw_fits = GeminiRawFITS(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
+        current_raw_fits = raw_fits_class(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
         current_raw_fits.id = fits_file.id
 
         self.session.add(current_raw_fits)

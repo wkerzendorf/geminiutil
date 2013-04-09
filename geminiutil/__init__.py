@@ -1,4 +1,5 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
+import logging
 
 #this indicates whether or not we are in the package's setup.py
 try:
@@ -121,3 +122,10 @@ if not _PACKAGE_SETUP_:
             del e
 
     del os, warn, config_dir  # clean up namespace
+
+logger = logging.getLogger('geminiutil')
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
