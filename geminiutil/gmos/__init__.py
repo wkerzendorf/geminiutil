@@ -1,1 +1,1 @@
-__author__ = 'wkerzend'
+from .gmos_project import GMOSMOSProject

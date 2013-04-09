@@ -92,6 +92,26 @@ class Program(Base):
     def __repr__(self):
         return '<Gemini Program %s>' % self.name
 
+
+class object(Base):
+    __tablename__ = 'object'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    ra = Column(Float)
+    dec = Column(Float)
+    description = Column(String)
+
+    def __init__(self, name, ra, dec, description=None):
+        self.name = name
+        self.ra = ra
+        self.dec = dec
+        self.description = description
+
+    def __repr__(self):
+        return '<Object %s>' % self.name
+
+
 class ObservationBlock(Base):
     __tablename__ = 'observation_block'
 
@@ -154,38 +174,29 @@ class Instrument(Base):
     def __repr__(self):
         return "<Gemini Instrument %s>" % self.name
 
+"""
 class GeminiRawFITS(object):
     __tablename__ = 'raw_fits_file'
 
-    id = Column(Integer, ForeignKey('base_fits.id'), primary_key=True)
-    date_obs = Column(DateTime)
-    instrument_id = Column(Integer, ForeignKey('instrument.id'))
-    observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
-    observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
-    observation_type_id = Column(Integer, ForeignKey('observation_type.id'))
-    exclude = Column(Boolean)
-
-
-    fits = relationship(FitsFile, uselist=False, backref='raw_fits')
-    instrument = relationship(Instrument, uselist=False, backref='raw_fits')
-    observation_block = relationship(ObservationBlock, uselist=False, backref='raw_fits')
-    observation_class = relationship(ObservationClass, uselist=False, backref='raw_fits')
-    observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
 
 
 
-    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id):
+
+
+
+    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id, exclude=False):
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
         self.observation_class_id = observation_class_id
         self.observation_type_id = observation_type_id
+        self.exclude = exclude
 
     def __repr__(self):
-        return "<raw FITS Instrument %s Block %s Class %s Type %s>" % (self.instrument.name, self.observation_block.name,
+        return "<raw FITS - Instrument %s Block %s Class %s Type %s>" % (self.instrument.name, self.observation_block.name,
                                     self.observation_class.name, self.observation_type.name)
 
-
+"""
 
 
 

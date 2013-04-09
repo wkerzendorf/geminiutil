@@ -1,4 +1,4 @@
-from .gemini_alchemy import Base, FitsFile, GeminiRawFITS, Instrument, Program, ObservationBlock, ObservationClass, ObservationType
+from .gemini_alchemy import Base, FitsFile, Instrument, Program, ObservationBlock, ObservationClass, ObservationType
 
 from sqlalchemy import engine, create_engine
 from sqlalchemy.orm import sessionmaker, backref, relationship
@@ -19,13 +19,14 @@ def get_category(session, category_str, category):
 
 class BaseProject(object):
 
-    def __init__(self, database_string):
+    def __init__(self, database_string, raw_fits_class):
         self.metadata = Base.metadata
         self.engine = create_engine(database_string)
         self.metadata.bind = self.engine
         self.metadata.create_all()
         self.Session = sessionmaker(bind=self.engine)
         self.session = self.Session()
+
 
 
     def add_directory(self, directory, file_filter='*.fits'):
