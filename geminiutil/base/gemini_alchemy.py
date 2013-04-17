@@ -208,6 +208,16 @@ class Instrument(Base, CategoryBaseClass):
     def __repr__(self):
         return "<Gemini Instrument %s>" % self.name
 
+
+class Operations(Base):
+
+    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
+    operations_type_id = Column(Integer)
+    operations_id = Column(Integer)
+    result_id = Column(Integer, ForeignKey('fits_file.id'))
+
+
+
 """
 class GeminiRawFITS(object):
     __tablename__ = 'raw_fits_file'
