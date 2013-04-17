@@ -35,7 +35,7 @@ class BaseProject(object):
 
 
     def add_directory(self, directory, file_filter='*.fits'):
-        for fname in glob(os.path.join(directory, file_filter)):
+        for fname in sorted(glob(os.path.join(directory, file_filter))):
             logger.info('Adding %s to project', fname)
             current_fits = FITSFile.from_fits_file(fname)
             self.session.add(current_fits)

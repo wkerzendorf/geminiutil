@@ -217,7 +217,8 @@ class Operations(Base):
     operations_id = Column(Integer)
     result_id = Column(Integer, ForeignKey('fits_file.id'))
 
-
+    def __init__(self, operations_type_id, operations_id, result_id):
+        pass
 
 """
 class GeminiRawFITS(object):
