@@ -210,6 +210,7 @@ class Instrument(Base, CategoryBaseClass):
 
 
 class Operations(Base):
+    __tablename__ = 'operations'
 
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
     operations_type_id = Column(Integer)
