@@ -22,13 +22,14 @@ def get_category(session, category_str, category):
 
 class BaseProject(object):
 
-    def __init__(self, database_string, raw_fits_class):
+    def __init__(self, database_string, raw_fits_class, echo=False):
         self.metadata = Base.metadata
-        self.engine = create_engine(database_string)
+        self.engine = create_engine(database_string, echo=echo)
         self.metadata.bind = self.engine
         self.metadata.create_all()
         self.Session = sessionmaker(bind=self.engine)
         self.session = self.Session()
+        self.conn = self.session.bind.connect()
 
         self.raw_fits_class = raw_fits_class
 
