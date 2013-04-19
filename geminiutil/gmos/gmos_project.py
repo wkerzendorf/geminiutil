@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 class GMOSMOSProject(BaseProject):
 
-    def __init__(self, database_string):
-        super(GMOSMOSProject, self).__init__(database_string, GMOSMOSRawFITS)
+    def __init__(self, database_string, echo=False):
+        super(GMOSMOSProject, self).__init__(database_string, GMOSMOSRawFITS, echo=echo)
 
 
 

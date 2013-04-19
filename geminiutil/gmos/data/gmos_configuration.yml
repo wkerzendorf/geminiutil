@@ -1,0 +1,24 @@
+---
+
+detector_type:
+  hamamatsu : "S10892-01"
+  eev : "SDSU II CCD"
+  e2vdd : "SDSU II e2v DD CCD42-90"
+
+arcsecpermm : 1.611444 arcsec/mm
+
+pixel_scale:
+
+  gmos-n:
+    eev : 0.0727 arcsec/pixel
+    e2vdd : 0.07288 arcsec/pixel
+    hamamatsu : 0.0727 arcsec/pixel
+
+  gmos-s:
+    eev : 0.073 arcsec/pixel
+
+spectral_cutoff:
+    eev : 1025 nm
+    e2vdd : 1050 nm
+    hamamatsu : 1080 mm
+

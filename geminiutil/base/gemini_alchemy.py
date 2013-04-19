@@ -91,6 +91,18 @@ class FITSFile(Base):
     def shape(self):
         return self.header['naxis1'], self.header['naxis2']
 
+    @property
+    def children(self):
+        session = object_session(self)
+        return session.query(FITSFile).join(Operations, Operations.output_fits_id==FITSFile.id).filter(Operations.input_fits_id==self.id).all()
+
+
+    @property
+    def parents(self):
+        session = object_session(self)
+        return session.query(FITSFile).join(Operations, Operations.input_fits_id==FITSFile.id).filter(Operations.output_fits_id==self.id).all()
+
+
     def __init__(self, fname, path, size, md5, extensions):
         self.fname = fname
         self.path = path
@@ -212,11 +224,30 @@ class Instrument(Base, CategoryBaseClass):
 class Operations(Base):
     __tablename__ = 'operations'
 
-    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
+    id = Column(Integer, primary_key=True)
+    input_fits_id = Column(Integer, ForeignKey('fits_file.id'))
     operations_type_id = Column(Integer)
     operations_id = Column(Integer)
-    result_id = Column(Integer, ForeignKey('fits_file.id'))
+    output_fits_id = Column(Integer, ForeignKey('fits_file.id'))
 
+
+    @classmethod
+    def from_fits_objects(cls, input_fits_object, output_fits_object, operations_type_id, operations_id):
+        current_operation = cls()
+        current_operation.input_fits_object = input_fits_object
+        current_operation.output_fits_object = output_fits_object
+        current_operation.input_fits_id = input_fits_object.id
+        current_operation.session = object_session(input_fits_object)
+        current_operation.operations_id = operations_id
+        current_operation.operations_type_id = operations_type_id
+        return current_operation
+
+    def commit(self):
+        self.session.add(self.output_fits_object)
+        self.session.commit()
+        self.output_fits_id = self.output_fits_object.id
+        self.session.add(self)
+        self.session.commit()
 
 
 """
