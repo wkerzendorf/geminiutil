@@ -79,3 +79,16 @@ class GMOSMOSRawFITS(Base):
         return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
                                                                   self.observation_type.name, self.object.name)
 
+
+class GMOSDetectorProperties(Base):
+    __tablename__ = 'gmos_detector_properties'
+    """
+    Detector properties table
+    """
+
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        pass
+
+    def __init__(self):
+        pass
