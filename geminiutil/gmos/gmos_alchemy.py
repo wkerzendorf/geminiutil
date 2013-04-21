@@ -5,7 +5,7 @@ from .. import base
 from sqlalchemy import Column, ForeignKey
 
 from sqlalchemy.orm import relationship, backref, object_session
-
+from sqlalchemy import func
 
 from astropy.utils import misc
 
@@ -85,10 +85,56 @@ class GMOSDetectorProperties(Base):
     """
     Detector properties table
     """
+    id = Column(Integer, primary_key=True)
+    naxis1 = Column(Integer)
+    naxis2 = Column(Integer)
+    ccd_name = Column(String)
+    readout_direction = Column(String)
+    gain = Column(Float)
+    read_noise = Column(Float)
+    x_binning = Column(Integer)
+    y_binning = Column(Integer)
+    frame_id = Column(Integer)
 
     @classmethod
-    def from_fits_object(cls, fits_object):
-        pass
+    def from_fits_object(cls, fits_object, ccd_no):
+        hdu = fits_object.fits_data[ccd_no]
 
-    def __init__(self):
-        pass
+        header = hdu.header
+        session = object_session(fits_object)
+
+        x_binning, y_binning = map(int, header['CCDSUM'].split())
+
+        readout_direction = header['ampname'].split(',')[1].strip()
+        detector_object = session.query(cls).filter(cls.naxis1==header['NAXIS1'], cls.naxis2==header['NAXIS2'],
+                                  cls.ccd_name==header['CCDNAME'], cls.readout_direction==readout_direction,
+                                  (func.abs(cls.gain - header['GAIN']) / header['GAIN']) < 0.0001,
+                                  (func.abs(cls.read_noise - header['RDNOISE']) / header['RDNOISE']) < 0.0001,
+                                  cls.x_binning==x_binning, cls.y_binning==y_binning,
+                                  cls.frame_id==int(header['FRAMEID'])).all()
+        print "hello", detector_object
+        if detector_object == []:
+            detector_object = cls(header['NAXIS1'], header['NAXIS2'], header['CCDNAME'], readout_direction, header['GAIN'],
+                       header['RDNOISE'], x_binning, y_binning, header['FRAMEID'])
+            session.add(detector_object)
+            session.commit()
+            return detector_object
+        elif len(detector_object) == 1:
+            return detector_object[0]
+        else:
+            raise ValueError('Found more than one detectors')
+
+    def __init__(self, naxis1, naxis2, ccd_name, readout_direction, gain, read_noise, x_binning, y_binning, frame_id):
+        self.naxis1 = naxis1
+        self.naxis2 = naxis2
+        self.ccd_name = ccd_name
+        self.readout_direction = readout_direction
+        self.gain = gain
+        self.read_noise = read_noise
+        self.x_binning = x_binning
+        self.y_binning = y_binning
+        self.frame_id = frame_id
+
+    def __repr__(self):
+        return "<detector id=%d ccdname=%s xbin=%d ybin=%d gain=%.2f>" % (self.id, self.ccd_name, self.x_binning,
+        self.y_binning, self.gain)
