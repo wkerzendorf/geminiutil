@@ -1,6 +1,14 @@
 import astropy.io.fits as fits
+from ..base import Base
+from sqlalchemy import String, Integer, Float, DateTime, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, relationship, backref, object_session
+from sqlalchemy import Column, ForeignKey
 import numpy as np
 from numpy.polynomial.polynomial import polyfit as polyfit
+
+
 
 """Basic reduction classes SubtractOverscan, CorrectGain, CombineHalves.
 
@@ -16,7 +24,17 @@ set up classes so they can used even as functions with default values?
 Ensure the out fits headers contain everything required to reproduce the result
 """
 
-class SubtractOverscan(object):
+class SubtractOverscan(Base):
+
+    id = Column(Integer, primary_key=True)
+    slice_x1 = Column(Integer)
+    slice_x2 = Column(Integer)
+    slice_y1 = Column(Integer)
+    slice_y2 = Column(Integer)
+
+
+
+
     def __init__(self, bias_slice=[slice(None), slice(1,11)], 
                  data_slice=[slice(None), slice(-1)], clip=3.):
         """Class that extracts bias-corrected exposed parts of GMOS extensions.
