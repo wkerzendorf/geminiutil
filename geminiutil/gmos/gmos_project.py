@@ -1,6 +1,6 @@
 from .. import base
 from ..base import BaseProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetectorProperties
 import logging
 from datetime import datetime
 
@@ -49,7 +49,9 @@ class GMOSMOSProject(BaseProject):
         observation_class = base.ObservationClass.from_fits_object(fits_file)
         observation_type = base.ObservationType.from_fits_object(fits_file)
         instrument = base.Instrument.from_fits_object(fits_file)
-
+        chip1_detector = GMOSDetectorProperties.from_fits_object(fits_file, 1)
+        chip2_detector = GMOSDetectorProperties.from_fits_object(fits_file, 2)
+        chip3_detector = GMOSDetectorProperties.from_fits_object(fits_file, 3)
 
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
