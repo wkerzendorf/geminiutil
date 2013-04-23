@@ -50,17 +50,21 @@ class GMOSMOSProject(BaseProject):
         observation_type = base.ObservationType.from_fits_object(fits_file)
         instrument = base.Instrument.from_fits_object(fits_file)
         if len(fits_file.fits_data) == 4:
-            chip1_detector = GMOSDetectorProperties.from_fits_object(fits_file, 1)
-            chip2_detector = GMOSDetectorProperties.from_fits_object(fits_file, 2)
-            chip3_detector = GMOSDetectorProperties.from_fits_object(fits_file, 3)
+            chip1_detector_id = GMOSDetectorProperties.from_fits_object(fits_file, 1).id
+            chip2_detector_id = GMOSDetectorProperties.from_fits_object(fits_file, 2).id
+            chip3_detector_id = GMOSDetectorProperties.from_fits_object(fits_file, 3).id
         else:
             logger.warn('Unusual fits data only %d HDUs', len(fits_file.fits_data))
+            chip1_detector_id = None
+            chip2_detector_id = None
+            chip3_detector_id = None
+
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
         gmos_raw = self.raw_fits_class(date_obs, instrument.id, observation_block.id, observation_class.id,
                                        observation_type.id, object.id,
-                                       chip1_detector.id, chip2_detector.id, chip3_detector.id)
+                                       chip1_detector_id, chip2_detector_id, chip3_detector_id)
 
         gmos_raw.id = fits_file.id
 

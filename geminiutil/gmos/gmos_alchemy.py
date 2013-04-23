@@ -128,13 +128,13 @@ class GMOSMOSRawFITS(Base):
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
     chip1_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip1_detector_id),
-                                uselist=False, backref='raw_fits')
+                                uselist=False)
 
     chip2_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip2_detector_id),
-                                uselist=False, backref='raw_fits')
+                                uselist=False)
 
     chip3_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip3_detector_id),
-                                uselist=False, backref='raw_fits')
+                                uselist=False)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
                  object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False,):
