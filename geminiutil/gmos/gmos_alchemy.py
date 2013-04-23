@@ -136,7 +136,8 @@ class GMOSMOSRawFITS(Base):
     chip3_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip3_detector_id),
                                 uselist=False, backref='raw_fits')
 
-    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id, object_id, mask_id=None, exclude=False):
+    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
+                 object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False,):
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
@@ -146,6 +147,9 @@ class GMOSMOSRawFITS(Base):
 
         self.mask_id = mask_id
         self.object_id = object_id
+        self.chip1_detector_id = chip1_detector_id
+        self.chip2_detector_id = chip2_detector_id
+        self.chip3_detector_id = chip3_detector_id
 
     def __repr__(self):
         return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
