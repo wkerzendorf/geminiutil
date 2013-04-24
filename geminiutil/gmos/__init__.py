@@ -4,4 +4,4 @@ from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetectorProperties
 from . import gmos_reduction as reduction
 
 from .gmos_util import DetectorGeometry
-from .gmos_basics import SubtractOverscan, subtract_overscan_single_amp
+from .gmos_basics import GMOSPrepare

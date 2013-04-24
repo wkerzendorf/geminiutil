@@ -24,6 +24,64 @@ set up classes so they can used even as functions with default values?
 Ensure the out fits headers contain everything required to reproduce the result
 """
 
+class GMOSPrepare(Base):
+    "This class does multiple things like subtract overscan"
+    __tablename__ = 'gmos_prepare'
+
+    id = Column(Integer, primary_key=True)
+    slice_x1 = Column(Integer)
+    slice_x2 = Column(Integer)
+    slice_y1 = Column(Integer)
+    slice_y2 = Column(Integer)
+    overscan_clip_sigma = Column(Float)
+    overscan_clip_iteration = Column(Float)
+
+
+    file_prefix = 'prep'
+
+    def __init__(self, bias_slice=[None, (1, 11)], data_slice=[None, -1], overscan_clip_sigma=None, overscal_clip_iterations=5):
+        self.bias_slice = bias_slice
+        self.data_slice = data_slice
+        self.overscan_clip_iteration = overscal_clip_iterations
+        self.overscan_clip_sigma = self.overscan_clip_sigma
+        pass
+
+    def __call__(self, gmos_raw_fits):
+        output_hdu_list = fits.HDUList()
+        fits_data = gmos_raw_fits.fits.fits_data
+        primary_hdu = fits_data[0]
+        output_hdu_list.append(primary_hdu)
+
+
+        for i in xrange(1, 4):
+            current_amp = fits_data[i]
+            current_amp.name='data_%d' % i
+            current_detector = getattr(gmos_raw_fits, 'chip%d_detector')
+            if current_detector.readout_direction == 'right':
+                isleftamp = False
+            elif current_detector.readout_direction == 'left':
+                isleftamp = True
+            else:
+                raise ValueError('Detector has unknown readout_direction %s', current_detector.readout_direction)
+            current_amp = subtract_overscan_single_amp(current_amp, isleftamp, bias_slice=self.bias_slice,
+                                                                 data_slice=self.data_slice, clip_sigma=self.overscan_clip_sigma)
+            current_amp = correct_gain(current_amp, current_detector.gain)
+
+            output_hdu_list.append(current_amp)
+
+            current_uncertainty = create_uncertainties(current_amp, current_detector.readout_noise)
+            current_uncertainty.name = 'uncertainty_%d' % i
+            output_hdu_list.append(current_uncertainty)
+            current_mask = create_mask(current_amp)
+            current_mask.name = 'mask_%d' % i
+            output_hdu_list.append(current_mask)
+
+        primary_hdu.header['gmos_prepare'] = 'success'
+        primary_hdu.header['uncertainty_type'] = 'stddev'
+
+        return output_hdu_list
+
+
 class SubtractOverscan(Base):
     __tablename__ = 'gmos_subtract_overscan'
     id = Column(Integer, primary_key=True)
@@ -238,21 +296,35 @@ def subtract_overscan_single_amp(amp, isleftamp, bias_slice=None, data_slice=Non
 
         return outamp
 
-def correct_gain_split_error(amp, chip_number, gain, readout_noise, uncertainty_mode='store'):
+def correct_gain(amp, gain):
         output_data = amp.data*gain
 
-        if uncertainty_mode is not None:
-            uncertainty_data = np.sqrt(readout_noise**2 + np.abs(output_data))
 
         output_amp = fits.ImageHDU(output_data, amp.header)
         output_amp.header['GAIN'] = 1.
         output_amp.header['GAINUSED'] = gain
-        output_amp.header['RONUSED'] = readout_noise
-        output_amp.header['RDNOISE'] = readout_noise
-        output_amp.name = 'chip%d_data' % chip_number
-        output_uncertainty = fits.ImageHDU(uncertainty_data, output_amp.header)
-        output_uncertainty.name = 'chip%d_uncertainty' % chip_number
 
+        return output_amp
+
+def create_uncertainties(amp, readout_noise):
+    uncertainty_data = np.sqrt(readout_noise**2 + np.abs(amp.data))
+
+    #What keywords to add for the error frame
+
+    return fits.ImageHDU(uncertainty_data, header=amp.header)
+
+def create_mask(amp, min_data=0, max_data=None):
+    mask_data = np.zeros_like(amp.data, dtype=bool)
+
+    #Make this more complex - like loading initial bpm from somewhere else
+
+    if min_data is not None:
+        mask_data |= amp.data < min_data
+
+    if mask_data is not None:
+        mask_data |= amp.data > max_data
+
+    return fits.ImageHDU(mask_data, header=amp.header)
 
 
 def reverse_yslice(in_slice, doreverse=True):
