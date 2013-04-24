@@ -25,7 +25,7 @@ Ensure the out fits headers contain everything required to reproduce the result
 """
 
 class SubtractOverscan(Base):
-
+    __tablename__ = 'gmos_subtract_overscan'
     id = Column(Integer, primary_key=True)
     slice_x1 = Column(Integer)
     slice_x2 = Column(Integer)
@@ -36,7 +36,7 @@ class SubtractOverscan(Base):
 
 
     def __init__(self, bias_slice=[slice(None), slice(1,11)], 
-                 data_slice=[slice(None), slice(-1)], clip=3.):
+                 data_slice=[slice(None), slice(-1)], clip_sigma=3.):
         """Class that extracts bias-corrected exposed parts of GMOS extensions.
 
         Bias is determined from selected regions of overscan, clipping outliers
@@ -61,7 +61,7 @@ class SubtractOverscan(Base):
         """
         self.bias_slice = self._interpret_slice(bias_slice)
         self.data_slice = self._interpret_slice(data_slice)
-        self.clip = clip
+        self.clip_sigma = clip_sigma
 
     def _interpret_slice(self, in_slice):
         """Turn lists or arrays into list of slices."""
@@ -75,7 +75,7 @@ class SubtractOverscan(Base):
                 out_slice += [slice(slc[0], slc[1])]
         return out_slice
 
-    def __call__(self, im):
+    def __call__(self, gmos_raw_fits):
         """Extract bias-corrected, exposed parts of raw GMOS fits file
 
         Parameters
@@ -107,43 +107,20 @@ class SubtractOverscan(Base):
         ***TODO*** update history in primary extension
         """
 
-        outlist = [im[0]]
-        for amp in im[1:]:    # convert useful sections
-            isleftamp = 'left' in amp.header['AMPNAME'] 
-            bias_slice = sub_slices(sec2slice(amp.header['BIASSEC']),
-                                    reverse_yslice(self.bias_slice, 
-                                                   doreverse=isleftamp))
-            data_slice = sub_slices(sec2slice(amp.header['DATASEC']),
-                                    reverse_yslice(self.data_slice, 
-                                                   doreverse=isleftamp))
-            overscan = amp.data[bias_slice]
-            if self.clip is None:
-                clipped = overscan
-            else:
-                clipped = overscan[np.where(np.abs(overscan-overscan.mean()) < 
-                                            self.clip*overscan.std())]
-            bias_estimate, bias_std = clipped.mean(), clipped.std()
-            outamp = fits.ImageHDU(amp.data[data_slice]-bias_estimate, 
-                                   amp.header)
-            outamp.header['CRPIX1'] += data_slice[1].start
-            outamp.header['CRPIX2'] += data_slice[0].start
-            outamp.header['CCDSEC'] = slice2sec(sub_slices(
-                sec2slice(amp.header['CCDSEC']), 
-                reverse_yslice(self.data_slice, doreverse=isleftamp),
-                np.fromstring(amp.header['CCDSUM'], sep=' ', dtype=np.int)))
-            outamp.header['DETSEC'] = slice2sec(sub_slices(
-                sec2slice(amp.header['DETSEC']), 
-                reverse_yslice(self.data_slice, doreverse=isleftamp),
-                np.fromstring(amp.header['CCDSUM'], sep=' ', dtype=np.int)))
-            outamp.header.pop('DATASEC') # all of image is now DATA
-            outamp.header.pop('BIASSEC') # no BIAS section left
-            outamp.header['DATAUSED'] = slice2sec(data_slice)
-            outamp.header['BIASUSED'] = slice2sec(bias_slice)
-            outamp.header['BIAS'] = bias_estimate
-            outamp.header['BIASSTD'] = bias_std
-            outlist += [outamp]
 
-        return fits.HDUList(outlist)
+        fits_data = gmos_raw_fits.fits.fits_data
+        assert len(fits_data) == 4
+
+        #outlist = [im[0]]
+
+        output_hdu_list = [fits_data[0]]
+
+        for i in xrange(1, 4):
+        #for amp in im[1:]:    # convert useful sections
+            amp = fits_data[i]
+            subtracted_amp = subtract_overscan_single_amp(amp, self.bias_slice, self.data_slice, clip_sigma=self.clip_sigma)
+            output_hdu_list.append(subtracted_amp)
+        return fits.HDUList(output_hdu_list)
 
 class CorrectGain(object):
     def __init__(self, gain=None, ron=None, error_opt=1):
@@ -170,7 +147,7 @@ class CorrectGain(object):
         self.ron = ron
         self.error_opt = 0 if error_opt is None else error_opt
 
-    def __call__(self, im):
+    def __call__(self, gmos_raw_fits):
         """Correct image for gain and possibly estimate uncertainties.
 
         In the output fits structure, the following headers are created/updated:
@@ -179,29 +156,10 @@ class CorrectGain(object):
         RDNOISE:  read-out noise to be used for estimating uncertainties
         RONUSED:  same
         """
-        assert self.ron is None or len(self.ron) == len(im)-1
-        assert self.gain is None or len(self.gain) == len(im)-1
         outlist = [im[0]]
-        for i,amp in enumerate(im[1:]):
-            gain = amp.header['GAIN'] if self.gain is None else self.gain[i]
-            ron = amp.header['RDNOISE'] if self.ron is None else self.ron[i]
-            outdat = amp.data*gain
-            if self.error_opt > 0:
-                outunc = np.sqrt(ron*ron+np.abs(outdat))
-                if self.error_opt == 1:
-                    outdat = np.dstack([outdat, outunc]).transpose(2,0,1)
-            outamp = fits.ImageHDU(outdat, amp.header)
-            outamp.header['GAIN'] = 1.
-            outamp.header['GAINUSED'] = gain
-            outamp.header['RONUSED'] = ron
-            outamp.header['RDNOISE'] = ron
-            if self.error_opt != 2:
-                outlist += [outamp]
-            else:
-                outamp.name = 'A{:1d}'.format(i+1)
-                outerr = fits.ImageHDU(outunc, outamp.header)
-                outerr.name = 'E{:1d}'.format(i+1)
-                outlist += [outamp, outerr]
+        for i, amp in enumerate(im[1:]):
+            detector_properties = getattr(gmos_raw_fits, 'chip%d_detector')
+
         return fits.HDUList(outlist)
 
 class CombineHalves(object):
@@ -238,6 +196,63 @@ class CombineHalves(object):
                                                               rdet[1].stop)))
             outlist += [chip]
         return fits.HDUList(outlist)
+
+
+
+
+def subtract_overscan_single_amp(amp, isleftamp, bias_slice=None, data_slice=None, clip_sigma=None):
+
+
+        bias_slice = sub_slices(sec2slice(amp.header['BIASSEC']),
+                                reverse_yslice(bias_slice,
+                                               doreverse=isleftamp))
+        data_slice = sub_slices(sec2slice(amp.header['DATASEC']),
+                                reverse_yslice(data_slice,
+                                               doreverse=isleftamp))
+        overscan = amp.data[bias_slice]
+
+        if clip_sigma is None:
+            clipped = overscan
+        else:
+            clipped = overscan[np.abs(overscan-overscan.mean()) <
+                                        clip_sigma*overscan.std()]
+        bias_estimate, bias_std = clipped.mean(), clipped.std()
+        outamp = fits.ImageHDU(amp.data[data_slice]-bias_estimate,
+                               amp.header)
+        outamp.header['CRPIX1'] += data_slice[1].start
+        outamp.header['CRPIX2'] += data_slice[0].start
+        outamp.header['CCDSEC'] = slice2sec(sub_slices(
+            sec2slice(amp.header['CCDSEC']),
+            reverse_yslice(data_slice, doreverse=isleftamp),
+            np.fromstring(amp.header['CCDSUM'], sep=' ', dtype=np.int)))
+        outamp.header['DETSEC'] = slice2sec(sub_slices(
+            sec2slice(amp.header['DETSEC']),
+            reverse_yslice(data_slice, doreverse=isleftamp),
+            np.fromstring(amp.header['CCDSUM'], sep=' ', dtype=np.int)))
+        outamp.header.pop('DATASEC') # all of image is now DATA
+        outamp.header.pop('BIASSEC') # no BIAS section left
+        outamp.header['DATAUSED'] = slice2sec(data_slice)
+        outamp.header['BIASUSED'] = slice2sec(bias_slice)
+        outamp.header['BIAS'] = bias_estimate
+        outamp.header['BIASSTD'] = bias_std
+
+        return outamp
+
+def correct_gain_split_error(amp, chip_number, gain, readout_noise, uncertainty_mode='store'):
+        output_data = amp.data*gain
+
+        if uncertainty_mode is not None:
+            uncertainty_data = np.sqrt(readout_noise**2 + np.abs(output_data))
+
+        output_amp = fits.ImageHDU(output_data, amp.header)
+        output_amp.header['GAIN'] = 1.
+        output_amp.header['GAINUSED'] = gain
+        output_amp.header['RONUSED'] = readout_noise
+        output_amp.header['RDNOISE'] = readout_noise
+        output_amp.name = 'chip%d_data' % chip_number
+        output_uncertainty = fits.ImageHDU(uncertainty_data, output_amp.header)
+        output_uncertainty.name = 'chip%d_uncertainty' % chip_number
+
 
 
 def reverse_yslice(in_slice, doreverse=True):
