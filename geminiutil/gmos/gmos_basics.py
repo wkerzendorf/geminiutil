@@ -39,7 +39,8 @@ class GMOSPrepare(Base):
 
     file_prefix = 'prep'
 
-    def __init__(self, bias_slice=[None, (1, 11)], data_slice=[None, -1], overscan_clip_sigma=None, overscal_clip_iterations=5):
+    def __init__(self, bias_slice=[slice(None), slice(1,11)], data_slice=[slice(None), slice(-1)],
+                 overscan_clip_sigma=None, overscal_clip_iterations=5):
         self.bias_slice = bias_slice
         self.data_slice = data_slice
         self.overscan_clip_iteration = overscal_clip_iterations
@@ -56,7 +57,7 @@ class GMOSPrepare(Base):
         for i in xrange(1, 4):
             current_amp = fits_data[i]
             current_amp.name='data_%d' % i
-            current_detector = getattr(gmos_raw_fits, 'chip%d_detector')
+            current_detector = getattr(gmos_raw_fits, 'chip%d_detector' % i)
             if current_detector.readout_direction == 'right':
                 isleftamp = False
             elif current_detector.readout_direction == 'left':
@@ -69,7 +70,7 @@ class GMOSPrepare(Base):
 
             output_hdu_list.append(current_amp)
 
-            current_uncertainty = create_uncertainties(current_amp, current_detector.readout_noise)
+            current_uncertainty = create_uncertainties(current_amp, current_detector.read_noise)
             current_uncertainty.name = 'uncertainty_%d' % i
             output_hdu_list.append(current_uncertainty)
             current_mask = create_mask(current_amp)
@@ -324,7 +325,7 @@ def create_mask(amp, min_data=0, max_data=None):
     if mask_data is not None:
         mask_data |= amp.data > max_data
 
-    return fits.ImageHDU(mask_data, header=amp.header)
+    return fits.ImageHDU(mask_data.astype(np.int64), header=amp.header)
 
 
 def reverse_yslice(in_slice, doreverse=True):

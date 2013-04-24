@@ -40,7 +40,7 @@ class GMOSMask(Base):
         self.name = name
         self.program_id = program_id
 
-class GMOSDetectorProperties(Base):
+class GMOSDetector(Base):
     __tablename__ = 'gmos_detector_properties'
 
     """
@@ -127,17 +127,19 @@ class GMOSMOSRawFITS(Base):
     observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
-    chip1_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip1_detector_id),
+    chip1_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip1_detector_id),
                                 uselist=False)
 
-    chip2_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip2_detector_id),
+    chip2_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip2_detector_id),
                                 uselist=False)
 
-    chip3_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip3_detector_id),
+    chip3_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip3_detector_id),
                                 uselist=False)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
-                 object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False,):
+                 object_id, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, mask_id=None,
+                 exclude=False,):
+
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
