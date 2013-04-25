@@ -40,7 +40,7 @@ class GMOSMask(Base):
         self.name = name
         self.program_id = program_id
 
-class GMOSDetectorProperties(Base):
+class GMOSDetector(Base):
     __tablename__ = 'gmos_detector_properties'
 
     """
@@ -53,7 +53,7 @@ class GMOSDetectorProperties(Base):
     ccd_name = Column(String)
     readout_direction = Column(String)
     gain = Column(Float)
-    read_noise = Column(Float)
+    readout_noise = Column(Float)
     x_binning = Column(Integer)
     y_binning = Column(Integer)
     frame_id = Column(Integer)
@@ -71,7 +71,7 @@ class GMOSDetectorProperties(Base):
         detector_object = session.query(cls).filter(cls.naxis1==header['NAXIS1'], cls.naxis2==header['NAXIS2'],
                                   cls.ccd_name==header['CCDNAME'], cls.readout_direction==readout_direction,
                                   (func.abs(cls.gain - header['GAIN']) / header['GAIN']) < 0.0001,
-                                  (func.abs(cls.read_noise - header['RDNOISE']) / header['RDNOISE']) < 0.0001,
+                                  (func.abs(cls.readout_noise - header['RDNOISE']) / header['RDNOISE']) < 0.0001,
                                   cls.x_binning==x_binning, cls.y_binning==y_binning,
                                   cls.frame_id==int(header['FRAMEID'])).all()
         if detector_object == []:
@@ -91,7 +91,7 @@ class GMOSDetectorProperties(Base):
         self.ccd_name = ccd_name
         self.readout_direction = readout_direction
         self.gain = gain
-        self.read_noise = read_noise
+        self.readout_noise = read_noise
         self.x_binning = x_binning
         self.y_binning = y_binning
         self.frame_id = frame_id
@@ -127,13 +127,13 @@ class GMOSMOSRawFITS(Base):
     observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
-    chip1_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip1_detector_id),
+    chip1_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip1_detector_id),
                                 uselist=False)
 
-    chip2_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip2_detector_id),
+    chip2_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip2_detector_id),
                                 uselist=False)
 
-    chip3_detector = relationship(GMOSDetectorProperties, primaryjoin=(GMOSDetectorProperties.id==chip3_detector_id),
+    chip3_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip3_detector_id),
                                 uselist=False)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
