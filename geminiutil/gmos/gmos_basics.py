@@ -12,6 +12,8 @@ import os
 import logging
 import re
 
+from collections import OrderedDict
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +89,6 @@ class GMOSPrepare(Base):
             output_hdu_list.append(current_mask)
 
         primary_hdu.header['gmos_prepare'] = 'success'
-        primary_hdu.header['uncertainty_type'] = 'stddev'
         output_hdu_list.writeto(os.path.join(work_dir, destination_fname), clobber=True)
 
         return FITSFile.from_fits_file(os.path.join(work_dir, destination_fname))
@@ -324,7 +325,7 @@ def create_uncertainties(amp, readout_noise):
     uncertainty_header['uncertainty_type'] = 'stddev'
     #What keywords to add for the error frame
 
-    return fits.ImageHDU(uncertainty_data, header=amp.header)
+    return fits.ImageHDU(uncertainty_data, header=uncertainty_header)
 
 def create_mask(amp, min_data=0, max_data=None):
     mask_data = np.zeros_like(amp.data, dtype=bool)
@@ -334,7 +335,7 @@ def create_mask(amp, min_data=0, max_data=None):
     if min_data is not None:
         mask_data |= amp.data < min_data
 
-    if mask_data is not None:
+    if max_data is not None:
         mask_data |= amp.data > max_data
 
     return fits.ImageHDU(mask_data.astype(np.int64), header=amp.header)
@@ -364,11 +365,12 @@ class GMOSCCDImage(nddata.NDData):
 
             if dataset_type.lower() == 'data':
                 dataset_dict[dataset_id]['data'] = hdu.data
+                dataset_dict[dataset_id]['meta'] = OrderedDict(hdu.header)
             elif dataset_type.lower() == 'mask':
                 dataset_dict[dataset_id]['mask'] = hdu.data.astype(bool)
             elif dataset_type.lower() == 'uncertainty':
                 if hdu.header['uncertainty_type'] == 'stddev':
-                    nddata.StdDevUncertainty(hdu.data)
+                    dataset_dict[dataset_id]['uncertainty'] = nddata.StdDevUncertainty(hdu.data)
                 else:
                     raise ValueError('Uncertainty Type %s not understood' % hdu.header['uncertainty_type'])
             else:
@@ -376,10 +378,12 @@ class GMOSCCDImage(nddata.NDData):
         final_dataset_dict = {}
         for dataset_id in dataset_dict:
             current_data = dataset_dict[dataset_id]['data']
+            current_meta = dataset_dict[dataset_id]['meta']
             current_uncertainty = dataset_dict[dataset_id]['uncertainty']
             current_mask = dataset_dict[dataset_id]['mask']
 
-            final_dataset_dict[dataset_id] = cls(current_data, uncertainty=current_uncertainty, mask=current_mask)
+            final_dataset_dict[dataset_id] = cls(current_data, uncertainty=current_uncertainty, mask=current_mask,
+                                                 meta=current_meta)
 
         return final_dataset_dict
 
