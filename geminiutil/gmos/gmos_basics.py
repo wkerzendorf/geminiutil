@@ -88,7 +88,7 @@ class CorrectGain(object):
         self.error_opt = 0 if error_opt is None else error_opt
 
     def __call__(self, im):
-        return correct_gain(im, gain=self.gain, ron=self.ron, 
+        return correct_gain(im, gain=self.gain, readout_noise=self.ron,
                             error_opt=self.error_opt)
 
 class CombineHalves(object):
@@ -181,12 +181,12 @@ def correct_overscan(amplifier, isleftamp, bias_slice=[slice(None), slice(1,11)]
 
     return outamp
 
-def correct_gain(im, gain=None, ron=None, error_opt=1):
+def correct_gain(amplifier, gain=None, readout_noise=None):
     """Correct image for gain and possibly estimate uncertainties.
     
     Parameters
     ----------
-    im: fits structure
+    amplifier: `~astropy.io.fits.ImageHDU`
     gain: sequence of floats, optional
        e-/ADU for each amplifiers (default: read from header)
     ron: sequence of floats, optional
@@ -204,29 +204,55 @@ def correct_gain(im, gain=None, ron=None, error_opt=1):
     GAINUSED: gain values were multiplied with
     RDNOISE:  read-out noise to be used for estimating uncertainties
     """
-    assert gain is None or len(gain) == len(im)-1
-    assert ron is None or len(ron) == len(im)-1
-    outlist = [im[0]]
-    for i,amp in enumerate(im[1:]):
-        ampgain = amp.header['GAIN'] if gain is None else gain[i]
-        ampron = amp.header['RDNOISE'] if ron is None else ron[i]
-        outdat = amp.data*ampgain
-        if error_opt > 0:
-            outunc = np.sqrt(ampron*ampron+np.abs(outdat))
-            if error_opt == 1:
-                outdat = np.dstack([outdat, outunc]).transpose(2,0,1)
-        outamp = fits.ImageHDU(outdat, amp.header)
-        outamp.header['GAIN'] = 1.
-        outamp.header['GAINUSED'] = ampgain
-        outamp.header['RDNOISE'] = ampron
-        if error_opt != 2:
-            outlist += [outamp]
-        else:
-            outamp.name = 'A{:1d}'.format(i+1)
-            outerr = fits.ImageHDU(outunc, outamp.header)
-            outerr.name = 'E{:1d}'.format(i+1)
-            outlist += [outamp, outerr]
-    return fits.HDUList(outlist)
+
+
+    if gain is None:
+        gain = amplifier.header['GAIN']
+
+    if readout_noise is None:
+        readout_noise = amplifier.header['RDNOISE']
+
+    corrected_amplifier_data = amplifier.data*gain
+
+    corrected_amplifier = fits.ImageHDU(corrected_amplifier_data, amplifier.header.copy())
+    corrected_amplifier.header['GAIN'] = 1.
+    corrected_amplifier.header['GAINUSED'] = gain
+    corrected_amplifier.header['RDNOISE'] = readout_noise
+
+    return corrected_amplifier
+
+
+def create_uncertainty_frame(amplifier, readout_noise=None, bias_uncertainty=None):
+    """
+    Create an standard deviation uncertainty frame for GMOS
+
+    Parameters
+    ----------
+
+    amplifier: ~astropy.io.fits.ImageHDU
+
+    readout_noise: ~float
+        readout_noise in e-/ADU !!! TODO really in e-/ADU or e-?? !!!!
+        if None will be read from the header 'RDNOISE'
+    bias_uncertainty: ~float
+        uncertainty from the overscan subtract
+        if None will be read from the header 'BIASSTD'
+    """
+
+    if readout_noise is None:
+        readout_noise = amplifier.header['RDNOISE']
+
+    if bias_uncertainty is None:
+        bias_uncertainty = amplifier.header['BIASSTD']
+
+    uncertainty_data = np.sqrt(np.abs(amplifier.data) + readout_noise**2 + bias_uncertainty**2)
+
+    uncertainty = fits.ImageHDU(uncertainty_data, amplifier.header.copy())
+    uncertainty.header['uncertainty_type'] = 'stddev'
+
+    return uncertainty
+
+
 
 def combine_halves(im):
     outlist = [im[0]]
