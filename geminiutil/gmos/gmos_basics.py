@@ -16,6 +16,61 @@ set up classes so they can used even as functions with default values?
 Ensure the out fits headers contain everything required to reproduce the result
 """
 
+class GMOSPrepare(object): # will be base when we know what
+    __tablename__ = 'gmos_prepare'
+
+    file_prefix = 'prep'
+
+    def __init__(self, bias_slice=[slice(None), slice(1, 11)], data_slice=[slice(None), slice(-1)],
+                 overscan_clip_sigma=3.):
+        self.bias_slice = bias_slice
+        self.data_slice = data_slice
+
+        self.overscan_clip_sigma = overscan_clip_sigma
+
+    def __call__(self, gmos_raw_object, fname=None, destination_dir='.'):
+
+        if fname is None:
+            fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
+        fits_data = gmos_raw_object.fits.fits_data
+
+        final_hdu_list = [fits_data[0].copy()]
+
+        for i in xrange(1, 4):
+            current_amplifier = fits_data[i]
+            detector = getattr(gmos_raw_object, 'chip%d_properties' % i)
+            if detector.readout_direction.lower() == 'left':
+                isleftamp = True
+            elif detector.readout_direction.lower() == 'right':
+                isleftamp = False
+            else:
+                raise ValueError('readout direction is unknown string: %s' % detector.readout_direction.lower())
+            amplifier_data = correct_overscan(current_amplifier, isleftamp, self.bias_slice,
+                                                            self.data_slice)
+            amplifier_data = correct_gain(amplifier_data, gain=detector.gain, readout_noise=detector.readout_noise)
+            amplifier_data.name = 'DATA_%d' % i
+            bias_uncertainty = amplifier_data.header['BIASSTD']
+            amplifier_uncertainty = create_uncertainty_frame(amplifier_data, readout_noise=detector.readout_noise,
+                                                             bias_uncertainty=bias_uncertainty)
+
+            amplifier_uncertainty.name = 'UNCERTAINTY_%d' % i
+
+            amplifier_mask = create_mask(amplifier_data)
+            amplifier_mask.name = 'MASK_%d' %i
+
+            final_hdu_list += [amplifier_data, amplifier_uncertainty, amplifier_mask]
+
+        return final_hdu_list
+
+
+
+
+
+
+
+            correct_overscan(amplifier)
+
+
 class SubtractOverscan(object):
     def __init__(self, bias_slice=[slice(None), slice(1,11)], 
                  data_slice=[slice(None), slice(-1)], clip=3.):
@@ -252,7 +307,21 @@ def create_uncertainty_frame(amplifier, readout_noise=None, bias_uncertainty=Non
 
     return uncertainty
 
+def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
+    if template_mask is None:
+        mask_data = np.zeros_like(amplifier.data, dtype=bool)
+    else:
+        mask_data = template_mask
 
+    #Make this more complex - like loading initial bpm from somewhere else
+
+    if min_data is not None:
+        mask_data |= amplifier.data < min_data
+
+    if max_data is not None:
+        mask_data |= amplifier.data > max_data
+
+    return fits.ImageHDU(mask_data.astype(np.int64), header=amplifier.header.copy())
 
 def combine_halves(im):
     outlist = [im[0]]
