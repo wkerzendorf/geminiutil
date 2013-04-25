@@ -99,15 +99,16 @@ class CombineHalves(object):
     def __call__(self, im):
         return combine_halves(im)
 
-def correct_overscan(im, bias_slice=[slice(None), slice(1,11)], 
-                 data_slice=[slice(None), slice(-1)], clip=3.):
+def correct_overscan(amplifier, isleftamp, bias_slice=[slice(None), slice(1,11)],
+                 data_slice=[slice(None), slice(-1)], sigma_clip=3.):
     """Extract bias-corrected, exposed parts of raw GMOS fits file
 
     Bias is determined from selected regions of overscan, clipping outliers
 
     Parameters
     ----------
-    im: fits structure
+    amplifier: `fits.ImageHDU` object
+
     bias_slice: list of 2 slices
         slices in Y, X within the overscan region given in the 
         extension header 'BIASSEC' to use for determining the bias level
@@ -143,40 +144,42 @@ def correct_overscan(im, bias_slice=[slice(None), slice(1,11)],
     ***TODO*** update history in primary extension
     """
 
-    outlist = [im[0]]
-    for amp in im[1:]:    # convert useful sections
-        isleftamp = 'left' in amp.header['AMPNAME'] 
-        bias_slice = sub_slices(sec2slice(amp.header['BIASSEC']),
-                                reverse_yslice(bias_slice, doreverse=isleftamp))
-        data_slice = sub_slices(sec2slice(amp.header['DATASEC']),
-                                reverse_yslice(data_slice, doreverse=isleftamp))
-        overscan = amp.data[bias_slice]
-        if clip is None:
-            clipped = overscan
-        else:
-            clipped = overscan[np.where(np.abs(overscan-overscan.mean()) < 
-                                        clip*overscan.std())]
-        bias_estimate, bias_std = clipped.mean(), clipped.std()
-        outamp = fits.ImageHDU(amp.data[data_slice]-bias_estimate, 
-                               amp.header)
-        outamp.header['CRPIX1'] += data_slice[1].start
-        outamp.header['CRPIX2'] += data_slice[0].start
-        binning = np.fromstring(amp.header['CCDSUM'], sep=' ', dtype=np.int)
-        outamp.header['CCDSEC'] = slice2sec(sub_slices(
-            sec2slice(amp.header['CCDSEC']), 
-            reverse_yslice(data_slice, doreverse=isleftamp), factors=binning))
-        outamp.header['DETSEC'] = slice2sec(sub_slices(
-            sec2slice(amp.header['DETSEC']), 
-            reverse_yslice(data_slice, doreverse=isleftamp), factors=binning))
-        outamp.header.pop('DATASEC') # all of image is now DATA
-        outamp.header.pop('BIASSEC') # no BIAS section left
-        outamp.header['DATAUSED'] = slice2sec(data_slice)
-        outamp.header['BIASUSED'] = slice2sec(bias_slice)
-        outamp.header['BIAS'] = bias_estimate
-        outamp.header['BIASSTD'] = bias_std
-        outlist += [outamp]
 
-    return fits.HDUList(outlist)
+    #    isleftamp = 'left' in amp.header['AMPNAME']
+
+    bias_slice = sub_slices(sec2slice(amplifier.header['BIASSEC']),
+                            reverse_yslice(bias_slice, doreverse=isleftamp))
+    data_slice = sub_slices(sec2slice(amplifier.header['DATASEC']),
+                            reverse_yslice(data_slice, doreverse=isleftamp))
+
+    overscan = amplifier.data[bias_slice]
+
+    if sigma_clip is None:
+        clipped = overscan
+    else:
+        clipped = overscan[np.abs(overscan-overscan.mean()) <
+                                    sigma_clip*overscan.std()]
+
+    bias_estimate, bias_std = clipped.mean(), clipped.std()
+    outamp = fits.ImageHDU(amplifier.data[data_slice]-bias_estimate,
+                           amplifier.header)
+    outamp.header['CRPIX1'] += data_slice[1].start
+    outamp.header['CRPIX2'] += data_slice[0].start
+    binning = np.fromstring(amplifier.header['CCDSUM'], sep=' ', dtype=np.int)
+    outamp.header['CCDSEC'] = slice2sec(sub_slices(
+        sec2slice(amplifier.header['CCDSEC']),
+        reverse_yslice(data_slice, doreverse=isleftamp), factors=binning))
+    outamp.header['DETSEC'] = slice2sec(sub_slices(
+        sec2slice(amplifier.header['DETSEC']),
+        reverse_yslice(data_slice, doreverse=isleftamp), factors=binning))
+    outamp.header.pop('DATASEC') # all of image is now DATA
+    outamp.header.pop('BIASSEC') # no BIAS section left
+    outamp.header['DATAUSED'] = slice2sec(data_slice)
+    outamp.header['BIASUSED'] = slice2sec(bias_slice)
+    outamp.header['BIAS'] = bias_estimate
+    outamp.header['BIASSTD'] = bias_std
+
+    return outamp
 
 def correct_gain(im, gain=None, ron=None, error_opt=1):
     """Correct image for gain and possibly estimate uncertainties.
