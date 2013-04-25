@@ -137,7 +137,7 @@ class GMOSMOSRawFITS(Base):
                                 uselist=False)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
-                 object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False,):
+                 object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False):
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id

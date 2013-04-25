@@ -62,9 +62,12 @@ class GMOSMOSProject(BaseProject):
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        gmos_raw = self.raw_fits_class(date_obs, instrument.id, observation_block.id, observation_class.id,
-                                       observation_type.id, object.id,
-                                       chip1_detector_id, chip2_detector_id, chip3_detector_id)
+        gmos_raw = self.raw_fits_class(date_obs=date_obs, instrumnet_id=instrument.id,
+                                       observation_block_id=observation_block.id,
+                                       observation_class_id=observation_class.id,
+                                       observation_type_id=observation_type.id, object_id=object.id,
+                                       chip1_detector_id=chip1_detector_id, chip2_detector_id=chip2_detector_id,
+                                       chip3_detector_id=chip3_detector_id)
 
         gmos_raw.id = fits_file.id
 
