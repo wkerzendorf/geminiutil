@@ -1,6 +1,13 @@
+from .. base import Base, FITSFile
 import astropy.io.fits as fits
+from astropy.nddata import NDData, StdDevUncertainty
 import numpy as np
 from numpy.polynomial.polynomial import polyfit as polyfit
+import logging
+import os
+from collections import OrderedDict
+
+logger = logging.getLogger(__name__)
 
 """Basic reduction classes SubtractOverscan, CorrectGain, CombineHalves.
 
@@ -32,19 +39,23 @@ class GMOSPrepare(object): # will be base when we know what
 
         if fname is None:
             fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
+
+        full_path = os.path.join(destination_dir, fname)
+
         fits_data = gmos_raw_object.fits.fits_data
 
         final_hdu_list = [fits_data[0].copy()]
 
         for i in xrange(1, 4):
             current_amplifier = fits_data[i]
-            detector = getattr(gmos_raw_object, 'chip%d_properties' % i)
+            detector = getattr(gmos_raw_object, 'chip%d_detector' % i)
             if detector.readout_direction.lower() == 'left':
                 isleftamp = True
             elif detector.readout_direction.lower() == 'right':
                 isleftamp = False
             else:
                 raise ValueError('readout direction is unknown string: %s' % detector.readout_direction.lower())
+
             amplifier_data = correct_overscan(current_amplifier, isleftamp, self.bias_slice,
                                                             self.data_slice)
             amplifier_data = correct_gain(amplifier_data, gain=detector.gain, readout_noise=detector.readout_noise)
@@ -60,7 +71,8 @@ class GMOSPrepare(object): # will be base when we know what
 
             final_hdu_list += [amplifier_data, amplifier_uncertainty, amplifier_mask]
 
-        return final_hdu_list
+        fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
+        return FITSFile.from_fits_file(full_path)
 
 
 
@@ -315,6 +327,46 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
         mask_data |= amplifier.data > max_data
 
     return fits.ImageHDU(mask_data.astype(np.int64), header=amplifier.header.copy())
+
+def gmos_ccd_image_arithmetic(func, *args):
+    pass
+
+class GMOSCCDImage(object):
+
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        #searching for independent datasets:
+        fits_data = fits_object.fits_data
+        chips = []
+        meta = OrderedDict(fits_data[0].header.copy())
+        for chip_id in xrange(1, 4):
+            data = fits_data['data_%d' % chip_id].data
+
+            if fits_data['uncertainty_%d' % chip_id].header['uncertainty_type'] == 'stddev':
+                uncertainty = StdDevUncertainty(fits_data['uncertainty_%d' % chip_id].data)
+
+            mask = fits_data['mask_%d' % chip_id].data.astype(bool)
+
+            chips.append(NDData(data, uncertainty=uncertainty, mask=mask))
+
+        return cls(chips, meta)
+
+
+    def __init__(self, chips, meta):
+        self.chips = chips
+        self.meta = meta
+
+        for chip in self.chips:
+            chip.meta = meta
+
+
+    def __add__(self, other):
+        if not isinstance(other, GMOSCCDImage):
+            raise TypeError
+
+
+
+
 
 def combine_halves(im):
     outlist = [im[0]]
