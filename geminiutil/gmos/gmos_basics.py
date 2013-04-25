@@ -1,5 +1,6 @@
 import astropy.io.fits as fits
-from ..base import Base
+from astropy import nddata
+from ..base import Base, FITSFile
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
@@ -7,6 +8,11 @@ from sqlalchemy.orm import sessionmaker, relationship, backref, object_session
 from sqlalchemy import Column, ForeignKey
 import numpy as np
 from numpy.polynomial.polynomial import polyfit as polyfit
+import os
+import logging
+import re
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -47,7 +53,10 @@ class GMOSPrepare(Base):
         self.overscan_clip_sigma = self.overscan_clip_sigma
         pass
 
-    def __call__(self, gmos_raw_fits):
+    def __call__(self, gmos_raw_fits, destination_fname=None, work_dir='.'):
+
+        if destination_fname is None:
+            destination_fname = '%s-%s' % (self.file_prefix, gmos_raw_fits.fits.fname)
         output_hdu_list = fits.HDUList()
         fits_data = gmos_raw_fits.fits.fits_data
         primary_hdu = fits_data[0]
@@ -79,8 +88,9 @@ class GMOSPrepare(Base):
 
         primary_hdu.header['gmos_prepare'] = 'success'
         primary_hdu.header['uncertainty_type'] = 'stddev'
+        output_hdu_list.writeto(os.path.join(work_dir, destination_fname), clobber=True)
 
-        return output_hdu_list
+        return FITSFile.from_fits_file(os.path.join(work_dir, destination_fname))
 
 
 class SubtractOverscan(Base):
@@ -90,6 +100,7 @@ class SubtractOverscan(Base):
     slice_x2 = Column(Integer)
     slice_y1 = Column(Integer)
     slice_y2 = Column(Integer)
+
 
 
 
@@ -309,7 +320,8 @@ def correct_gain(amp, gain):
 
 def create_uncertainties(amp, readout_noise):
     uncertainty_data = np.sqrt(readout_noise**2 + np.abs(amp.data))
-
+    uncertainty_header = amp.header.copy()
+    uncertainty_header['uncertainty_type'] = 'stddev'
     #What keywords to add for the error frame
 
     return fits.ImageHDU(uncertainty_data, header=amp.header)
@@ -326,6 +338,51 @@ def create_mask(amp, min_data=0, max_data=None):
         mask_data |= amp.data > max_data
 
     return fits.ImageHDU(mask_data.astype(np.int64), header=amp.header)
+
+class GMOSCCDImage(nddata.NDData):
+
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        #searching for independent datasets:
+        dataset_pattern = re.compile('(^.+)_(\d+)$')
+        dataset_dict = {}
+        for hdu in fits_object.fits_data:
+            if hdu.name.lower() == 'primary':
+                continue
+
+            dataset_match = dataset_pattern.match(hdu.name)
+            if dataset_match is None:
+                logger.warning('Unknown extension %s' % hdu.name)
+                continue
+
+            dataset_type, dataset_id = dataset_match.groups()
+            dataset_id = int(dataset_id)
+            dataset_type = dataset_type.lower()
+
+            if dataset_id not in dataset_dict:
+                dataset_dict[dataset_id] = {}
+
+            if dataset_type.lower() == 'data':
+                dataset_dict[dataset_id]['data'] = hdu.data
+            elif dataset_type.lower() == 'mask':
+                dataset_dict[dataset_id]['mask'] = hdu.data.astype(bool)
+            elif dataset_type.lower() == 'uncertainty':
+                if hdu.header['uncertainty_type'] == 'stddev':
+                    nddata.StdDevUncertainty(hdu.data)
+                else:
+                    raise ValueError('Uncertainty Type %s not understood' % hdu.header['uncertainty_type'])
+            else:
+                raise ValueError('dataset type %s not known' % dataset_type)
+        final_dataset_dict = {}
+        for dataset_id in dataset_dict:
+            current_data = dataset_dict[dataset_id]['data']
+            current_uncertainty = dataset_dict[dataset_id]['uncertainty']
+            current_mask = dataset_dict[dataset_id]['mask']
+
+            final_dataset_dict[dataset_id] = cls(current_data, uncertainty=current_uncertainty, mask=current_mask)
+
+        return final_dataset_dict
+
 
 
 def reverse_yslice(in_slice, doreverse=True):
