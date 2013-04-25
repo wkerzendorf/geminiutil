@@ -64,13 +64,6 @@ class GMOSPrepare(object): # will be base when we know what
 
 
 
-
-
-
-
-            correct_overscan(amplifier)
-
-
 class SubtractOverscan(object):
     def __init__(self, bias_slice=[slice(None), slice(1,11)], 
                  data_slice=[slice(None), slice(-1)], clip=3.):
