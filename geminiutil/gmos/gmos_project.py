@@ -1,6 +1,6 @@
 from .. import base
 from ..base import BaseProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating
 import logging
 from datetime import datetime
 
@@ -135,6 +135,18 @@ class GMOSMOSProject(BaseProject):
                                     wavelength_end_unit='nm', fname=line['fname'],
                                     path=os.path.join(configuration_dir, 'filter_data'))
             self.session.add(new_filter)
+
+        gmos_gratings = np.recfromtxt(os.path.join(configuration_dir, 'GMOSgratings.dat'),
+                                      names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
+                                               'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
+        logger.info('Reading grating information')
+        for line in gmos_gratings:
+            new_grating = GMOSGrating(name=line['name'], ruling_density_value=line['ruling_density'],
+                                       blaze_wavelength_value=line['blaze_wave'], R=line['R'],
+                                       coverage_value=line['coverage'], wavelength_start_value=line['wave_start'],
+                                       wavelength_end_value=line['wave_end'],
+                                       wavelength_offset_value=line['wave_offset'], y_offset_value=line['y_offset'])
+            self.session.add(new_grating)
 
         self.session.commit()
 

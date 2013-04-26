@@ -1,5 +1,5 @@
 from .gmos_project import GMOSMOSProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetector, GMOSFilter
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetector, GMOSFilter, GMOSGrating
 
 from . import gmos_reduction as reduction
 

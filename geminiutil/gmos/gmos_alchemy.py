@@ -48,7 +48,7 @@ class GMOSMask(Base):
         self.program_id = program_id
 
 class GMOSDetector(Base):
-    __tablename__ = 'gmos_detector_properties'
+    __tablename__ = 'gmos_detector'
 
     """
     Detector properties table
@@ -126,6 +126,25 @@ class GMOSMOSInstrumentSetup(Base):
 
     id = Column(Integer, primary_key=True)
 
+    filter1_id = Column(Integer, ForeignKey('gmos_filters.id'))
+    filter2_id = Column(Integer, ForeignKey('gmos_filters.id'))
+
+    grating_id = Column(Integer, ForeignKey('gmos_gratings.id'))
+
+    grating_wavelength_value = Column(Float)
+    grating_wavelength_unit = units.Unit('nm')
+
+    grating_tilt_value = Column(Float)
+    grating_tilt_unit = units.Unit('degree')
+
+    wavelength_central_value = Column(Float)
+    wavelength_central_unit = units.Unit('nm')
+
+    detector1_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
+
+
 
 class GMOSFilter(Base):
     __tablename__ = 'gmos_filters'
@@ -156,6 +175,51 @@ class GMOSFilter(Base):
 
     def __repr__(self):
         return "<GMOS Filter %s>" % self.name
+
+class GMOSGrating(Base):
+    __tablename__ = 'gmos_gratings'
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String)
+
+    ruling_density_value = Column(Float)
+    ruling_density_unit = units.Unit('1/mm') # lines/mm
+
+    blaze_wavelength_value = Column(Float)
+    blaze_wavelength_unit = units.Unit('nm')
+
+    R = Column(Float)
+
+    coverage_value = Column(Float)
+    coverage_unit = units.Unit('nm')
+
+    wavelength_start_value = Column(Float)
+    wavelength_start_unit = units.Unit('nm')
+
+    wavelength_end_value = Column(Float)
+    wavelength_end_unit = units.Unit('nm')
+
+    wavelength_offset_value = Column(Float)
+    wavelength_offset_unit = units.Unit('nm')
+
+    y_offset_value = Column(Float)
+    y_offset_unit = units.Unit('nm')
+
+
+    def __getattr__(self, item):
+        if item in ['ruling_density', 'blaze_wavelength', 'coverage', 'wavelength_start', 'wavelength_end',
+                    'wavelength_offset', 'y_offset']:
+            item_value = getattr(self, '%s_value' % item)
+            item_unit = getattr(self, '%s_unit' % item)
+            return units.Quantity(item_value, item_unit)
+        else:
+            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
+
+    def __repr__(self):
+        return "<GMOS Grating %s>" % self.name
+
+
 
 class GMOSMOSRawFITS(Base):
     __tablename__ = 'gmos_mos_raw_fits'
