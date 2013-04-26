@@ -121,107 +121,6 @@ class GMOSDetector(Base):
         return "<detector id=%d ccdname=%s xbin=%d ybin=%d gain=%.2f>" % (self.id, self.ccd_name, self.x_binning,
         self.y_binning, self.gain)
 
-class GMOSMOSInstrumentSetup(Base):
-    __tablename__ = 'gmos_mos_instrument_setup'
-
-    id = Column(Integer, primary_key=True)
-
-    filter1_id = Column(Integer, ForeignKey('gmos_filters.id'))
-    filter2_id = Column(Integer, ForeignKey('gmos_filters.id'))
-
-    grating_id = Column(Integer, ForeignKey('gmos_gratings.id'))
-
-    grating_slit_wavelength_value = Column(Float)
-    grating_slit_wavelength_unit = units.Unit('nm')
-
-    grating_central_wavelength_value = Column(Float)
-    grating_central_wavelength_unit = units.Unit('nm')
-
-    grating_tilt_value = Column(Float)
-    grating_tilt_unit = units.Unit('degree')
-
-    grating_order = Column(Integer)
-
-    detector1_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
-
-    filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
-                                uselist=False)
-
-    filter2 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
-                                uselist=False)
-
-
-
-    detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
-                                uselist=False)
-
-    detector2 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector2_id),
-                                uselist=False)
-
-    detector3 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector3_id),
-                                uselist=False)
-
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        header = fits_object.fits_data[0].header
-
-        filter1_id = session.query(GMOSFilter).filter_by(name=header['filter1']).one().id
-        filter2_id = session.query(GMOSFilter).filter_by(name=header['filter2']).one().id
-
-        grating_id = session.query(GMOSGrating).filter_by(name=header['grating']).one().id
-
-        grating_central_wavelength = header['centwave']
-        grating_slit_wavelength = header['grwlen']
-
-        grating_tilt = header['grtilt']
-        grating_order = header['grorder']
-
-        detector1_id = GMOSDetector.from_fits_object(fits_object, 1).id
-        detector2_id = GMOSDetector.from_fits_object(fits_object, 2).id
-        detector3_id = GMOSDetector.from_fits_object(fits_object, 3).id
-
-
-        instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
-            cls.grating_id==grating_id,
-            (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
-                                                    / grating_central_wavelength) < 0.0001,
-            (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
-                                                    / grating_slit_wavelength) < 0.0001,
-            (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < 0.0001,
-            cls.detector1_id==detector1_id, cls.detector2_id==detector2_id, cls.detector3_id==detector3_id).all()
-
-        if instrument_setup_object == []:
-            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order, detector1_id, detector2_id, detector3_id)
-            session.add(instrument_setup_object)
-            session.commit()
-
-        elif len(instrument_setup_object) == 1:
-            return instrument_setup_object
-
-        else:
-            raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
-
-
-
-
-    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
-                 grating_order, detector1_id, detector2_id, detector3_id):
-        self.filter1_id = filter1_id
-        self.filter2_id = filter2_id
-        self.grating_id = grating_id
-        self.grating_central_wavelength_value = grating_central_wavelength_value
-        self.grating_tilt_value = grating_tilt_value
-        self.grating_order = grating_order
-        self.detector1_id = detector1_id
-        self.detector2_id = detector2_id
-        self.detector3_id = detector3_id
-
 
 
 
@@ -299,6 +198,130 @@ class GMOSGrating(Base):
     def __repr__(self):
         return "<GMOS Grating %s>" % self.name
 
+class GMOSMOSInstrumentSetup(Base):
+    __tablename__ = 'gmos_mos_instrument_setup'
+
+    id = Column(Integer, primary_key=True)
+
+    filter1_id = Column(Integer, ForeignKey('gmos_filters.id'))
+    filter2_id = Column(Integer, ForeignKey('gmos_filters.id'))
+
+    grating_id = Column(Integer, ForeignKey('gmos_gratings.id'))
+
+    grating_slit_wavelength_value = Column(Float)
+    grating_slit_wavelength_unit = units.Unit('nm')
+
+    grating_central_wavelength_value = Column(Float)
+    grating_central_wavelength_unit = units.Unit('nm')
+
+    grating_tilt_value = Column(Float)
+    grating_tilt_unit = units.Unit('degree')
+
+    grating_order = Column(Integer)
+
+    detector1_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
+
+#    filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
+#                                uselist=False)
+
+#    filter2 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
+#                                uselist=False)
+
+
+
+    detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
+                                uselist=False)
+
+    detector2 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector2_id),
+                                uselist=False)
+
+    detector3 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector3_id),
+                                uselist=False)
+
+
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        session = object_session(fits_object)
+        header = fits_object.fits_data[0].header
+        filter1 = header['filter1']
+        filter2 = header['filter2']
+
+        if filter1.startswith('open'):
+            filter1_id = None
+        else:
+            filter1_id = session.query(GMOSFilter).filter_by(name=filter1).one().id
+
+        if filter2.startswith('open'):
+            filter2_id = None
+        else:
+            filter2_id = session.query(GMOSFilter).filter_by(name=filter2).one().id
+
+        grating = header['grating']
+        if grating.lower() == 'mirror':
+            grating_id = None
+        else:
+            grating_id = session.query(GMOSGrating).filter_by(name=header['grating']).one().id
+
+        grating_central_wavelength = header['centwave']
+        grating_slit_wavelength = header['grwlen']
+
+        grating_tilt = header['grtilt']
+        grating_order = header['grorder']
+
+        detector1_id = GMOSDetector.from_fits_object(fits_object, 1).id
+        detector2_id = GMOSDetector.from_fits_object(fits_object, 2).id
+        detector3_id = GMOSDetector.from_fits_object(fits_object, 3).id
+
+
+        instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
+            cls.grating_id==grating_id,
+            (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
+                                                    / grating_central_wavelength) < 0.0001,
+            (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
+                                                    / grating_slit_wavelength) < 0.0001,
+            (func.abs(cls.grating_tilt_value - grating_tilt)
+                                                    / grating_tilt) < 0.0001,
+            cls.detector1_id==detector1_id, cls.detector2_id==detector2_id, cls.detector3_id==detector3_id).all()
+
+        if instrument_setup_object == []:
+            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
+                                            grating_order, detector1_id, detector2_id, detector3_id)
+            session.add(instrument_setup_object)
+            session.commit()
+            return instrument_setup_object
+
+        elif len(instrument_setup_object) == 1:
+            return instrument_setup_object
+
+        else:
+            raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
+
+
+
+
+    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
+                 grating_order, detector1_id, detector2_id, detector3_id):
+        self.filter1_id = filter1_id
+        self.filter2_id = filter2_id
+        self.grating_id = grating_id
+        self.grating_central_wavelength_value = grating_central_wavelength_value
+        self.grating_tilt_value = grating_tilt_value
+        self.grating_order = grating_order
+        self.detector1_id = detector1_id
+        self.detector2_id = detector2_id
+        self.detector3_id = detector3_id
+
+    @misc.lazyproperty
+    def x_binning(self):
+        assert self.detector1.x_binning == self.detector2.x_binning == self.detector3.x_binning
+        return self.detector1.x_binning
+
+    @misc.lazyproperty
+    def y_binning(self):
+        assert self.detector1.y_binning == self.detector2.y_binning == self.detector3.y_binning
+        return self.detector1.y_binning
 
 
 class GMOSMOSRawFITS(Base):
@@ -331,7 +354,7 @@ class GMOSMOSRawFITS(Base):
     instrument_setup = relationship(GMOSMOSInstrumentSetup)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
-                 object_id, mask_id=None, chip1_detector_id=None, chip2_detector_id=None, chip3_detector_id=None, exclude=False):
+                 object_id, mask_id=None, instrument_setup_id=None, exclude=False):
         self.date_obs = date_obs
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
@@ -341,10 +364,7 @@ class GMOSMOSRawFITS(Base):
 
         self.mask_id = mask_id
         self.object_id = object_id
-        self.detector1_id = chip1_detector_id
-        self.detector2_id = chip2_detector_id
-        self.detector3_id = chip3_detector_id
-
+        self.instrument_setup_id = instrument_setup_id
     def __repr__(self):
         return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
                                                                   self.observation_type.name, self.object.name)

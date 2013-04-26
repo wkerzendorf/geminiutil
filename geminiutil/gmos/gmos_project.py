@@ -1,6 +1,6 @@
 from .. import base
 from ..base import BaseProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
 import logging
 from datetime import datetime
 
@@ -52,15 +52,15 @@ class GMOSMOSProject(BaseProject):
         observation_class = base.ObservationClass.from_fits_object(fits_file)
         observation_type = base.ObservationType.from_fits_object(fits_file)
         instrument = base.Instrument.from_fits_object(fits_file)
+
+
         if len(fits_file.fits_data) == 4:
-            chip1_detector_id = GMOSDetector.from_fits_object(fits_file, 1).id
-            chip2_detector_id = GMOSDetector.from_fits_object(fits_file, 2).id
-            chip3_detector_id = GMOSDetector.from_fits_object(fits_file, 3).id
+            instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(fits_file).id
         else:
             logger.warn('Unusual fits data only %d HDUs', len(fits_file.fits_data))
-            chip1_detector_id = None
-            chip2_detector_id = None
-            chip3_detector_id = None
+            instrument_setup_id = None
+
+
 
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
@@ -69,8 +69,7 @@ class GMOSMOSProject(BaseProject):
                                        observation_block_id=observation_block.id,
                                        observation_class_id=observation_class.id,
                                        observation_type_id=observation_type.id, object_id=object.id,
-                                       chip1_detector_id=chip1_detector_id, chip2_detector_id=chip2_detector_id,
-                                       chip3_detector_id=chip3_detector_id)
+                                       instrument_setup_id=instrument_setup_id)
 
         gmos_raw.id = fits_file.id
 
