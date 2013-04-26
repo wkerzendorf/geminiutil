@@ -1,3 +1,7 @@
+
+import os
+import yaml
+
 from ..base import Base, FITSFile, Instrument, ObservationType, ObservationClass, ObservationBlock, Object
 
 from .. import base
@@ -8,6 +12,9 @@ from sqlalchemy.orm import relationship, backref, object_session
 from sqlalchemy import func
 
 from astropy.utils import misc
+from astropy import units
+detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
+detector_information = yaml.load(file(detector_yaml_fname))
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
@@ -96,10 +103,59 @@ class GMOSDetector(Base):
         self.y_binning = y_binning
         self.frame_id = frame_id
 
+    @misc.lazyproperty
+    def pixel_scale(self):
+        if self.ccd_name.startswith('EEV'):
+            return detector_information['pixel_scale']['eev'] * units.Unit('arcsec/pixel')
+        else:
+            raise NotImplemented('CCD %s not implemented yet' % self.ccd_name)
+
+    @misc.lazyproperty
+    def spectral_cutoff(self):
+        if self.ccd_name.startswith('EEV'):
+            return detector_information['spectral_cutoff']['eev'] * units.Unit('nm')
+        else:
+            raise NotImplemented('CCD %s not implemented yet' % self.ccd_name)
+
     def __repr__(self):
         return "<detector id=%d ccdname=%s xbin=%d ybin=%d gain=%.2f>" % (self.id, self.ccd_name, self.x_binning,
         self.y_binning, self.gain)
 
+class GMOSMOSInstrumentSetup(Base):
+    __tablename__ = 'gmos_mos_instrument_setup'
+
+    id = Column(Integer, primary_key=True)
+
+
+class GMOSFilter(Base):
+    __tablename__ = 'gmos_filters'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    fname = Column(String)
+    path = Column(String)
+    wavelength_start_value = Column(Float)
+    wavelength_start_unit = Column(String)
+
+    wavelength_end_value = Column(Float)
+    wavelength_end_unit = Column(String)
+
+
+    @property
+    def full_path(self):
+        return self.path.join(self.path, self.fname)
+
+    @property
+    def wavelength_start(self):
+        return units.Quantity(self.wavelength_start_value, self.wavelength_start_unit)
+
+    @property
+    def wavelength_end(self):
+        return units.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
+
+
+    def __repr__(self):
+        return "<GMOS Filter %s>" % self.name
 
 class GMOSMOSRawFITS(Base):
     __tablename__ = 'gmos_mos_raw_fits'

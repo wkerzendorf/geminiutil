@@ -1,13 +1,16 @@
 from .. import base
 from ..base import BaseProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter
 import logging
 from datetime import datetime
 
+import numpy as np
 import re
+import os
 
 logger = logging.getLogger(__name__)
 
+default_configuration_dir = os.path.join(os.path.dirname(__file__), 'data')
 
 class GMOSMOSProject(BaseProject):
 
@@ -118,7 +121,22 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
+    def initialize_database(self, configuration_dir=None):
+        if configuration_dir is None:
+            configuration_dir = default_configuration_dir
 
+        logger.info('Reading Filter information')
+
+        gmos_filters = np.recfromtxt(os.path.join(configuration_dir, 'GMOSfilters.dat'),
+                                     names=['name', 'wave_start', 'wave_end', 'fname'])
+        for line in gmos_filters:
+            new_filter = GMOSFilter(name=line['name'], wavelength_start_value=line['wave_start'],
+                                    wavelength_start_unit='nm', wavelength_end_value=line['wave_end'],
+                                    wavelength_end_unit='nm', fname=line['fname'],
+                                    path=os.path.join(configuration_dir, 'filter_data'))
+            self.session.add(new_filter)
+
+        self.session.commit()
 
 
 
