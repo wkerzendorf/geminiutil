@@ -233,9 +233,9 @@ class GMOSMOSRawFITS(Base):
     observation_type_id = Column(Integer, ForeignKey('observation_type.id'))
     object_id = Column(Integer, ForeignKey('object.id'))
     mask_id = Column(Integer, ForeignKey('gmos_mask.id'))
-    chip1_detector_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
-    chip2_detector_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
-    chip3_detector_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
+    detector1_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
+    detector2_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
+    detector3_id = Column(Integer, ForeignKey('gmos_detector_properties.id'))
 
     exclude = Column(Boolean)
 
@@ -247,13 +247,13 @@ class GMOSMOSRawFITS(Base):
     observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
-    chip1_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip1_detector_id),
+    detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
                                 uselist=False)
 
-    chip2_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip2_detector_id),
+    detector2 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector2_id),
                                 uselist=False)
 
-    chip3_detector = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==chip3_detector_id),
+    detector3 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector3_id),
                                 uselist=False)
 
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
@@ -267,9 +267,9 @@ class GMOSMOSRawFITS(Base):
 
         self.mask_id = mask_id
         self.object_id = object_id
-        self.chip1_detector_id = chip1_detector_id
-        self.chip2_detector_id = chip2_detector_id
-        self.chip3_detector_id = chip3_detector_id
+        self.detector1_id = chip1_detector_id
+        self.detector2_id = chip2_detector_id
+        self.detector3_id = chip3_detector_id
 
     def __repr__(self):
         return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
