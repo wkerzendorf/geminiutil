@@ -16,6 +16,8 @@ from astropy import units
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
 
+import numpy as np
+
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
@@ -155,6 +157,10 @@ class GMOSFilter(Base):
     def __repr__(self):
         return "<GMOS Filter %s>" % self.name
 
+    def __str__(self):
+        return self.name
+
+
 class GMOSGrating(Base):
     __tablename__ = 'gmos_gratings'
 
@@ -198,6 +204,9 @@ class GMOSGrating(Base):
     def __repr__(self):
         return "<GMOS Grating %s>" % self.name
 
+    def __str__(self):
+        return self.name
+
 class GMOSMOSInstrumentSetup(Base):
     __tablename__ = 'gmos_mos_instrument_setup'
 
@@ -223,12 +232,13 @@ class GMOSMOSInstrumentSetup(Base):
     detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
     detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
 
-#    filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
-#                                uselist=False)
+    filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter1_id),
+                                uselist=False)
 
-#    filter2 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==detector1_id),
-#                                uselist=False)
+    filter2 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter2_id),
+                                uselist=False)
 
+    grating = relationship(GMOSGrating)
 
 
     detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
@@ -313,6 +323,14 @@ class GMOSMOSInstrumentSetup(Base):
         self.detector2_id = detector2_id
         self.detector3_id = detector3_id
 
+    def __getattr__(self, item):
+        if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
+            item_value = getattr(self, '%s_value' % item)
+            item_unit = getattr(self, '%s_unit' % item)
+            return units.Quantity(item_value, item_unit)
+        else:
+            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
+
     @misc.lazyproperty
     def x_binning(self):
         assert self.detector1.x_binning == self.detector2.x_binning == self.detector3.x_binning
@@ -322,6 +340,27 @@ class GMOSMOSInstrumentSetup(Base):
     def y_binning(self):
         assert self.detector1.y_binning == self.detector2.y_binning == self.detector3.y_binning
         return self.detector1.y_binning
+
+    @misc.lazyproperty
+    def anamorphic_factor(self):
+        return np.sin((self.grating_tilt + 50 * units.degree).to('rad').value) / np.sin(self.grating_tile.to('rad').value)
+
+    @misc.lazyproperty
+    def calculated_tilt(self):
+        raise NotImplementedError('not implemented for now')
+
+    @misc.lazyproperty
+    def resolution(self):
+        raise NotImplementedError('not implemented for now')
+        #return 206265 * ()
+
+
+
+
+    def __repr__(self):
+        return "<GMOS MOS Instrument Setup Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
+                (self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
+                self.grating_central_wavelength_unit)
 
 
 class GMOSMOSRawFITS(Base):
