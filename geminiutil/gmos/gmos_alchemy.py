@@ -6,6 +6,7 @@ from ..base import Base, FITSFile, Instrument, ObservationType, ObservationClass
 
 from .. import base
 
+from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
 
 from sqlalchemy.orm import relationship, backref, object_session
@@ -13,9 +14,17 @@ from sqlalchemy import func
 
 from astropy.utils import misc
 from astropy import units
+
+import numpy as np
+
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
 
+grating_eq, tilt = np.loadtxt(os.path.join(os.path.dirname(__file__), 'data', 'gratingeq.dat'), unpack=True)
+
+# in the simplest case this is m*lambda = (1/ruling_density) * (sin(beta) + sin(alpha))
+grating_eq_sorting = np.argsort(grating_eq)
+grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorting], tilt[grating_eq_sorting])
 import numpy as np
 
 #sqlalchemy types
@@ -259,18 +268,18 @@ class GMOSMOSInstrumentSetup(Base):
         filter2 = header['filter2']
 
         if filter1.startswith('open'):
-            filter1_id = None
+            filter1_id = session.query(GMOSFilter).filter_by(name='open').one().id
         else:
             filter1_id = session.query(GMOSFilter).filter_by(name=filter1).one().id
 
         if filter2.startswith('open'):
-            filter2_id = None
+            filter2_id = session.query(GMOSFilter).filter_by(name='open').one().id
         else:
             filter2_id = session.query(GMOSFilter).filter_by(name=filter2).one().id
 
         grating = header['grating']
         if grating.lower() == 'mirror':
-            grating_id = None
+            grating_id = session.query(GMOSGrating).filter_by(name='mirror').one().id
         else:
             grating_id = session.query(GMOSGrating).filter_by(name=header['grating']).one().id
 
@@ -329,7 +338,7 @@ class GMOSMOSInstrumentSetup(Base):
             item_unit = getattr(self, '%s_unit' % item)
             return units.Quantity(item_value, item_unit)
         else:
-            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
+            return self.__getattribute__(item)
 
     @misc.lazyproperty
     def x_binning(self):
@@ -343,17 +352,42 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def anamorphic_factor(self):
-        return np.sin((self.grating_tilt + 50 * units.degree).to('rad').value) / np.sin(self.grating_tile.to('rad').value)
+        return np.sin((self.calculated_grating_tilt + 50 * units.degree).to('rad').value) / \
+               np.sin(self.calculated_grating_tilt.to('rad').value)
+
 
     @misc.lazyproperty
-    def calculated_tilt(self):
-        raise NotImplementedError('not implemented for now')
+    def grating_equation_coefficient(self):
+        return (self.grating.ruling_density * self.grating_central_wavelength).to(1).value
+
 
     @misc.lazyproperty
-    def resolution(self):
-        raise NotImplementedError('not implemented for now')
-        #return 206265 * ()
+    def calculated_grating_tilt(self):
+        return grating_equation_interpolator(self.grating_equation_coefficient) * units.degree
 
+
+
+
+
+    def calculate_resolution(self, slit_width):
+        """
+            Calculate resolution
+
+            Parameters
+            ----------
+
+            slit_width : `~astropy.units.Quantity`
+                angle
+        """
+        return self.grating_equation_coefficient / (slit_width.to('rad').value * 81.0 *
+                                             np.sin(self.calculated_grating_tilt.to('rad').value))
+
+    @misc.lazyproperty
+    def spectral_pixel_scale(self):
+        xscale = self.x_binning * self.detector1.pixel_scale.to('rad/pix').value
+        spectral_pixel_scale_value = self.anamorphic_factor * xscale * self.grating_central_wavelength.to('nm').value * \
+            81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
+        return spectral_pixel_scale_value * units.Unit('nm/pix')
 
 
 

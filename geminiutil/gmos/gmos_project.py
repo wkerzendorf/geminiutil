@@ -135,6 +135,12 @@ class GMOSMOSProject(BaseProject):
                                     path=os.path.join(configuration_dir, 'filter_data'))
             self.session.add(new_filter)
 
+        open_filter = GMOSFilter(name=open, wavelength_start_value=0,
+                                    wavelength_start_unit='nm', wavelength_end_value=np.inf,
+                                    wavelength_end_unit='nm', fname=None,
+                                    path=None)
+        self.session.add(open_filter)
+
         gmos_gratings = np.recfromtxt(os.path.join(configuration_dir, 'GMOSgratings.dat'),
                                       names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
                                                'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
@@ -146,6 +152,14 @@ class GMOSMOSProject(BaseProject):
                                        wavelength_end_value=line['wave_end'],
                                        wavelength_offset_value=line['wave_offset'], y_offset_value=line['y_offset'])
             self.session.add(new_grating)
+
+        mirror = GMOSGrating(name='mirror', ruling_density_value=0.0,
+                                       blaze_wavelength_value=0.0, R=0.0,
+                                       coverage_value=np.inf, wavelength_start_value=0.0,
+                                       wavelength_end_value=np.inf,
+                                       wavelength_offset_value=0.0, y_offset_value=0.0)
+        self.session.add(mirror)
+
 
         self.session.commit()
 
