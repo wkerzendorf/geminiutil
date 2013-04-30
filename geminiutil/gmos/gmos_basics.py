@@ -164,8 +164,8 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
     if max_data is not None:
         mask_data |= amplifier.data > max_data
 
-    # used to return .astype(np.int64), but why? Fits should handle bools
-    # (if not, use int8 or int32)
+    mask_data = mask_data.astype(dtype=np.unit8)
+
     return fits.ImageHDU(mask_data, header=amplifier.header)
 
 def gmos_ccd_image_arithmetic(func, *args):
