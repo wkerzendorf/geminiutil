@@ -58,6 +58,7 @@ class GMOSMask(Base):
         self.name = name
         self.program_id = program_id
 
+
 class GMOSDetector(Base):
     __tablename__ = 'gmos_detector'
 
@@ -113,6 +114,7 @@ class GMOSDetector(Base):
         self.x_binning = x_binning
         self.y_binning = y_binning
         self.frame_id = frame_id
+
 
     @misc.lazyproperty
     def pixel_scale(self):
@@ -216,6 +218,16 @@ class GMOSGrating(Base):
     def __str__(self):
         return self.name
 
+class GMOSMOSInstrumentSetup2Detector(Base):
+    __tablename__ = 'gmos_mos_instrument_setup2gmosdetector'
+
+    id = Column(Integer, primary_key=True)
+    instrument_setup_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup.id'))
+    detector_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    fits_extension_id = Column(Integer)
+
+
+
 class GMOSMOSInstrumentSetup(Base):
     __tablename__ = 'gmos_mos_instrument_setup'
 
@@ -237,9 +249,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating_order = Column(Integer)
 
-    detector1_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    #instrument_setup2detector_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup2gmosdetector.id'))
 
     filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter1_id),
                                 uselist=False)
@@ -250,14 +260,6 @@ class GMOSMOSInstrumentSetup(Base):
     grating = relationship(GMOSGrating)
 
 
-    detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
-                                uselist=False)
-
-    detector2 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector2_id),
-                                uselist=False)
-
-    detector3 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector3_id),
-                                uselist=False)
 
 
     @classmethod
@@ -288,11 +290,7 @@ class GMOSMOSInstrumentSetup(Base):
 
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
-
-        detector1_id = GMOSDetector.from_fits_object(fits_object, 1).id
-        detector2_id = GMOSDetector.from_fits_object(fits_object, 2).id
-        detector3_id = GMOSDetector.from_fits_object(fits_object, 3).id
-
+        instrument_setup2detector = []
 
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
             cls.grating_id==grating_id,
@@ -301,14 +299,23 @@ class GMOSMOSInstrumentSetup(Base):
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
                                                     / grating_slit_wavelength) < 0.0001,
             (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < 0.0001,
-            cls.detector1_id==detector1_id, cls.detector2_id==detector2_id, cls.detector3_id==detector3_id).all()
+                                                    / grating_tilt) < 0.0001).all()
 
         if instrument_setup_object == []:
             instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order, detector1_id, detector2_id, detector3_id)
+                                            grating_order)
             session.add(instrument_setup_object)
             session.commit()
+
+            for fits_extension_id in xrange(1, len(fits_object.fits_data)):
+                current_detector_id = GMOSDetector.from_fits_object(fits_object, fits_extension_id).id
+                session.add(GMOSMOSInstrumentSetup2Detector(instrument_setup_id=instrument_setup_object.id,
+                                                            fits_extension_id=fits_extension_id,
+                                                            detector_id=current_detector_id))
+            session.commit()
+
+
+
             return instrument_setup_object
 
         elif len(instrument_setup_object) == 1:
@@ -318,19 +325,21 @@ class GMOSMOSInstrumentSetup(Base):
             raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
 
 
-
+    @property
+    def detectors(self):
+        session = object_session(self)
+        detectors = session.query(GMOSDetector).join(GMOSMOSInstrumentSetup2Detector).\
+            filter(GMOSMOSInstrumentSetup2Detector.instrument_setup_id==self.id).all()
+        return detectors
 
     def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
-                 grating_order, detector1_id, detector2_id, detector3_id):
+                 grating_order):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
-        self.detector1_id = detector1_id
-        self.detector2_id = detector2_id
-        self.detector3_id = detector3_id
 
     def __getattr__(self, item):
         if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
@@ -366,8 +375,20 @@ class GMOSMOSInstrumentSetup(Base):
         return grating_equation_interpolator(self.grating_equation_coefficient) * units.degree
 
 
+    @misc.lazyproperty
+    def wavelength_start(self):
+        wavelength_start_value = np.max([item.to('nm').value for item in [self.filter1.wavelength_start,
+                                                                          self.filter2.wavelength_start,
+                                                                          self.grating.wavelength_start]])
+        return wavelength_start_value * units.Unit('nm')
 
-
+    @misc.lazyproperty
+    def wavelength_end(self):
+        wavelength_end_value = np.min([item.to('nm').value for item in [self.filter1.wavelength_end,
+                                                                        self.filter2.wavelength_end,
+                                                                        self.detector3.spectral_cutoff,
+                                                                        self.grating.wavelength_end]])
+        return wavelength_end_value * units.Unit('nm')
 
     def calculate_resolution(self, slit_width):
         """

@@ -54,10 +54,10 @@ class GMOSMOSProject(BaseProject):
         instrument = base.Instrument.from_fits_object(fits_file)
 
 
-        if len(fits_file.fits_data) == 4:
+        if len(fits_file.fits_data) == 4 or len(fits_file.fits_data) ==  7:
             instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(fits_file).id
         else:
-            logger.warn('Unusual fits data only %d HDUs', len(fits_file.fits_data))
+            logger.warn('Unusual fits data with %d HDUs (expecting either 4 or 7)', len(fits_file.fits_data))
             instrument_setup_id = None
 
 
@@ -135,7 +135,7 @@ class GMOSMOSProject(BaseProject):
                                     path=os.path.join(configuration_dir, 'filter_data'))
             self.session.add(new_filter)
 
-        open_filter = GMOSFilter(name=open, wavelength_start_value=0,
+        open_filter = GMOSFilter(name='open', wavelength_start_value=0,
                                     wavelength_start_unit='nm', wavelength_end_value=np.inf,
                                     wavelength_end_unit='nm', fname=None,
                                     path=None)
