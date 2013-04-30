@@ -139,9 +139,9 @@ def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
         sub_slices(sec2slice(amplifier.header['DETSEC']), ccd_subslice))
     outamp.header.pop('DATASEC') # all of image is now DATA
     outamp.header.pop('BIASSEC') # no BIAS section left
-    outamp.header['HIERARCH APPLIED DATASEC'] \
+    outamp.header['APPLIED DATASEC'] \
         = slice2sec(data_slice), 'Section considered good'
-    outamp.header['HIERARCH APPLIED BIASSEC'] \
+    outamp.header['APPLIED BIASSEC'] \
         = slice2sec(bias_slice), 'Section used to estimate bias'
     outamp.header['BIAS'] = bias_estimate, 'ADU'
     outamp.header['BIASSTD'] = bias_std, 'ADU'
@@ -174,7 +174,7 @@ def correct_gain(amplifier, gain=None):
 
     corrected = fits.ImageHDU(amplifier.data*gain, amplifier.header)
     corrected.header['GAIN'] = 1., 'Unity since data corrected for gain'
-    corrected.header['HIERARCH APPLIED GAIN'] = gain, 'Gain multiplied with'
+    corrected.header['APPLIED GAIN'] = gain, 'Gain multiplied with'
 
     return corrected
 
@@ -215,13 +215,13 @@ def combine_halves(amp1, amp2):
                 chip.header[key] = slice2sec([ls[0], 
                                               slice(ls[1].start, rs[1].stop)])
                 continue
-        chip.header['HIERARCH LEFT {}'.format(key)] = chip.header.pop(key)
-        chip.header['HIERARCH RIGHT {}'.format(key)] = right.header[key]
+        chip.header['LEFT {}'.format(key)] = chip.header.pop(key)
+        chip.header['RIGHT {}'.format(key)] = right.header[key]
     # and write the new data sections
     ls, rs = left.data.shape, right.data.shape
-    chip.header['HIERARCH LEFT DATASEC'] \
+    chip.header['LEFT DATASEC'] \
         = slice2sec([slice(0, ls[0]), slice(0, ls[1])]), 'Part from left amp.'
-    chip.header['HIERARCH RIGHT DATASEC'] \
+    chip.header['RIGHT DATASEC'] \
         = slice2sec([slice(0, rs[0]), 
                      slice(ls[1], ls[1]+rs[1])]), 'Part from right amp.'
     return chip

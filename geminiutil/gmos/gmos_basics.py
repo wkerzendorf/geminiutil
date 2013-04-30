@@ -7,7 +7,7 @@ import logging
 import os
 from collections import OrderedDict
 
-import basic.prepare as prepare
+from .basic import prepare
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class GMOSPrepare(object): # will be base when we know what
 
         for i in xrange(1, len(fits_data)):
             current_amplifier = fits_data[i]
-            detector = getattr(gmos_raw_object, 'chip%d_detector' % i)
+            detector = gmos_raw_object.instrument_setup.detectors[i - 1]
             if detector.readout_direction.lower() == 'left':
                 isleftamp = True
             elif detector.readout_direction.lower() == 'right':
