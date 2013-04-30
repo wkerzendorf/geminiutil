@@ -1,13 +1,16 @@
 from .. import base
 from ..base import BaseProject
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
 import logging
 from datetime import datetime
 
+import numpy as np
 import re
+import os
 
 logger = logging.getLogger(__name__)
 
+default_configuration_dir = os.path.join(os.path.dirname(__file__), 'data')
 
 class GMOSMOSProject(BaseProject):
 
@@ -49,15 +52,15 @@ class GMOSMOSProject(BaseProject):
         observation_class = base.ObservationClass.from_fits_object(fits_file)
         observation_type = base.ObservationType.from_fits_object(fits_file)
         instrument = base.Instrument.from_fits_object(fits_file)
+
+
         if len(fits_file.fits_data) == 4:
-            chip1_detector_id = GMOSDetector.from_fits_object(fits_file, 1).id
-            chip2_detector_id = GMOSDetector.from_fits_object(fits_file, 2).id
-            chip3_detector_id = GMOSDetector.from_fits_object(fits_file, 3).id
+            instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(fits_file).id
         else:
             logger.warn('Unusual fits data only %d HDUs', len(fits_file.fits_data))
-            chip1_detector_id = None
-            chip2_detector_id = None
-            chip3_detector_id = None
+            instrument_setup_id = None
+
+
 
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
@@ -66,8 +69,7 @@ class GMOSMOSProject(BaseProject):
                                        observation_block_id=observation_block.id,
                                        observation_class_id=observation_class.id,
                                        observation_type_id=observation_type.id, object_id=object.id,
-                                       chip1_detector_id=chip1_detector_id, chip2_detector_id=chip2_detector_id,
-                                       chip3_detector_id=chip3_detector_id)
+                                       instrument_setup_id=instrument_setup_id)
 
         gmos_raw.id = fits_file.id
 
@@ -118,7 +120,34 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
+    def initialize_database(self, configuration_dir=None):
+        if configuration_dir is None:
+            configuration_dir = default_configuration_dir
 
+        logger.info('Reading Filter information')
+
+        gmos_filters = np.recfromtxt(os.path.join(configuration_dir, 'GMOSfilters.dat'),
+                                     names=['name', 'wave_start', 'wave_end', 'fname'])
+        for line in gmos_filters:
+            new_filter = GMOSFilter(name=line['name'], wavelength_start_value=line['wave_start'],
+                                    wavelength_start_unit='nm', wavelength_end_value=line['wave_end'],
+                                    wavelength_end_unit='nm', fname=line['fname'],
+                                    path=os.path.join(configuration_dir, 'filter_data'))
+            self.session.add(new_filter)
+
+        gmos_gratings = np.recfromtxt(os.path.join(configuration_dir, 'GMOSgratings.dat'),
+                                      names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
+                                               'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
+        logger.info('Reading grating information')
+        for line in gmos_gratings:
+            new_grating = GMOSGrating(name=line['name'], ruling_density_value=line['ruling_density'],
+                                       blaze_wavelength_value=line['blaze_wave'], R=line['R'],
+                                       coverage_value=line['coverage'], wavelength_start_value=line['wave_start'],
+                                       wavelength_end_value=line['wave_end'],
+                                       wavelength_offset_value=line['wave_offset'], y_offset_value=line['y_offset'])
+            self.session.add(new_grating)
+
+        self.session.commit()
 
 
 
