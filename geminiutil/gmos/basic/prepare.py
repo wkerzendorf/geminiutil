@@ -209,19 +209,21 @@ def combine_halves(amp1, amp2):
     for key in ('AMPNAME', 'FRMNAME', 'FRAMEID', 'CCDSEC', 'GAIN', 'RDNOISE',
                 'APPLIED BIASSEC', 'BIAS', 'BIASSTD', 'BIASUNC',
                 'APPLIED DATASEC', 'APPLIED GAIN'):
+        if key in ('CCDSEC', 'DETSEC'):
+            ls, rs = sec2slice(left.header[key]), sec2slice(right.header[key])
+            if ls[0] == rs[0] and ls[1].stop == rs[1].start:
+                chip.header[key] = slice2sec([ls[0], 
+                                              slice(ls[1].start, rs[1].stop)])
+                continue
         chip.header['HIERARCH LEFT {}'.format(key)] = chip.header.pop(key)
         chip.header['HIERARCH RIGHT {}'.format(key)] = right.header[key]
-    # and write/update some others
+    # and write the new data sections
     ls, rs = left.data.shape, right.data.shape
     chip.header['HIERARCH LEFT DATASEC'] \
         = slice2sec([slice(0, ls[0]), slice(0, ls[1])]), 'Part from left amp.'
     chip.header['HIERARCH RIGHT DATASEC'] \
         = slice2sec([slice(0, rs[0]), 
                      slice(ls[1], ls[1]+rs[1])]), 'Part from right amp.'
-    ldet = sec2slice(left.header['DETSEC'])
-    rdet = sec2slice(right.header['DETSEC'])
-    chip.header['DETSEC'] = slice2sec((ldet[0], 
-                                       slice(ldet[1].start, rdet[1].stop)))
     return chip
 
 def adjust_subslices(subslices, factors=None, reverse1=False):
