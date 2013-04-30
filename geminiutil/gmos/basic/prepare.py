@@ -1,4 +1,5 @@
 import astropy.io.fits as fits
+import astropy.stats.funcs as stats
 import numpy as np
 import warnings
 
@@ -26,9 +27,8 @@ def prepare(image, bias_subslice=[slice(None), slice(1,11)],
         (default: all Y, 0:-1 in X, i.e., all but first column read out;
          None: no subslice, i.e., use header)
     clip: ~float
-        number of standard deviations from the mean within which overscan
-        values have to be to be included.  I.e., bias substracted is mean of
-        overscan[where[abs(overscan-overscan.mean())<clip*overscan.std()]]
+        number of standard deviations from the median within which overscan
+        values have to be to be included.
     gain: sequence of ~float, optional
         e-/ADU for each amplifiers (default: header 'GAIN')
     read_noise: sequence of ~float, optional
@@ -70,7 +70,7 @@ def prepare(image, bias_subslice=[slice(None), slice(1,11)],
     return fits.HDUList(outlist)
 
 def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
-                     data_subslice=[slice(None), slice(-1)], sigma_clip=3.):
+                     data_subslice=[slice(None), slice(-1)], clip=3.):
     """Extract bias-corrected, exposed parts of raw GMOS fits file
 
     Bias is determined from selected regions of overscan, clipping outliers
@@ -85,10 +85,9 @@ def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
     data_subslice: list of 2 slices
         good parts of the array, relative to header 'DATASEC'
         (default: all Y, 0:-1 in X, i.e., all but first column read-out)
-    sigma_clip: ~float
-        number of standard deviations from the mean within which overscan
-        values have to be to be included.  I.e., bias substracted is mean of
-        overscan[where[abs(overscan-overscan.mean())<clip*overscan.std()]]
+    clip: ~float
+        number of standard deviations from the median within which overscan
+        values have to be to be included.  
 
     Returns
     -------
@@ -119,9 +118,8 @@ def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
                             adjust_subslices(data_subslice, reverse1=isleftamp))
 
     overscan = amplifier.data[bias_slice]
-    if sigma_clip:
-        clipped = overscan[np.abs(overscan-overscan.mean()) <
-                                    sigma_clip*overscan.std()]
+    if clip:
+        clipped = stats.sigma_clip(overscan, clip, 1, maout='inplace')
     else:
         clipped = overscan
 

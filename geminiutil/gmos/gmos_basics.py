@@ -56,7 +56,9 @@ class GMOSPrepare(object): # will be base when we know what
                 raise ValueError('readout direction is unknown string: %s' % detector.readout_direction.lower())
 
             amplifier_data = prepare.correct_overscan(current_amplifier, 
-                                     self.bias_subslice, self.data_subslice)
+                                                      self.bias_subslice, 
+                                                      self.data_subslice,
+                                                      self.bias_clip_sigma)
             amplifier_data = prepare.correct_gain(amplifier_data, gain=detector.gain)
             amplifier_data.name = 'DATA_%d' % i
             bias_uncertainty = amplifier_data.header['BIASSTD']
