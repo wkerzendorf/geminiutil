@@ -3,6 +3,10 @@ import astropy.stats.funcs as stats
 import numpy as np
 import warnings
 
+from astropy.io.fits.verify import VerifyWarning
+
+warnings.filterwarnings('once', category=VerifyWarning)
+
 def prepare(image, bias_subslice=[slice(None), slice(1,11)], 
             data_subslice=[slice(None), slice(-1)], clip=3.,
             gain=None, read_noise=None, combine=True, 
