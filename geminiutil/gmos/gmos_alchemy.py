@@ -6,6 +6,7 @@ from ..base import Base, FITSFile, Instrument, ObservationType, ObservationClass
 
 from .. import base
 
+from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
 
 from sqlalchemy.orm import relationship, backref, object_session
@@ -13,9 +14,17 @@ from sqlalchemy import func
 
 from astropy.utils import misc
 from astropy import units
+
+import numpy as np
+
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
 
+grating_eq, tilt = np.loadtxt(os.path.join(os.path.dirname(__file__), 'data', 'gratingeq.dat'), unpack=True)
+
+# in the simplest case this is m*lambda = (1/ruling_density) * (sin(beta) + sin(alpha))
+grating_eq_sorting = np.argsort(grating_eq)
+grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorting], tilt[grating_eq_sorting])
 import numpy as np
 
 #sqlalchemy types
@@ -48,6 +57,7 @@ class GMOSMask(Base):
     def __init__(self, name, program_id):
         self.name = name
         self.program_id = program_id
+
 
 class GMOSDetector(Base):
     __tablename__ = 'gmos_detector'
@@ -104,6 +114,7 @@ class GMOSDetector(Base):
         self.x_binning = x_binning
         self.y_binning = y_binning
         self.frame_id = frame_id
+
 
     @misc.lazyproperty
     def pixel_scale(self):
@@ -207,6 +218,16 @@ class GMOSGrating(Base):
     def __str__(self):
         return self.name
 
+class GMOSMOSInstrumentSetup2Detector(Base):
+    __tablename__ = 'gmos_mos_instrument_setup2gmosdetector'
+
+    id = Column(Integer, primary_key=True)
+    instrument_setup_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup.id'))
+    detector_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    fits_extension_id = Column(Integer)
+
+
+
 class GMOSMOSInstrumentSetup(Base):
     __tablename__ = 'gmos_mos_instrument_setup'
 
@@ -228,9 +249,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating_order = Column(Integer)
 
-    detector1_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector2_id = Column(Integer, ForeignKey('gmos_detector.id'))
-    detector3_id = Column(Integer, ForeignKey('gmos_detector.id'))
+    #instrument_setup2detector_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup2gmosdetector.id'))
 
     filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter1_id),
                                 uselist=False)
@@ -241,14 +260,6 @@ class GMOSMOSInstrumentSetup(Base):
     grating = relationship(GMOSGrating)
 
 
-    detector1 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector1_id),
-                                uselist=False)
-
-    detector2 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector2_id),
-                                uselist=False)
-
-    detector3 = relationship(GMOSDetector, primaryjoin=(GMOSDetector.id==detector3_id),
-                                uselist=False)
 
 
     @classmethod
@@ -259,18 +270,18 @@ class GMOSMOSInstrumentSetup(Base):
         filter2 = header['filter2']
 
         if filter1.startswith('open'):
-            filter1_id = None
+            filter1_id = session.query(GMOSFilter).filter_by(name='open').one().id
         else:
             filter1_id = session.query(GMOSFilter).filter_by(name=filter1).one().id
 
         if filter2.startswith('open'):
-            filter2_id = None
+            filter2_id = session.query(GMOSFilter).filter_by(name='open').one().id
         else:
             filter2_id = session.query(GMOSFilter).filter_by(name=filter2).one().id
 
         grating = header['grating']
         if grating.lower() == 'mirror':
-            grating_id = None
+            grating_id = session.query(GMOSGrating).filter_by(name='mirror').one().id
         else:
             grating_id = session.query(GMOSGrating).filter_by(name=header['grating']).one().id
 
@@ -279,11 +290,7 @@ class GMOSMOSInstrumentSetup(Base):
 
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
-
-        detector1_id = GMOSDetector.from_fits_object(fits_object, 1).id
-        detector2_id = GMOSDetector.from_fits_object(fits_object, 2).id
-        detector3_id = GMOSDetector.from_fits_object(fits_object, 3).id
-
+        instrument_setup2detector = []
 
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
             cls.grating_id==grating_id,
@@ -292,14 +299,23 @@ class GMOSMOSInstrumentSetup(Base):
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
                                                     / grating_slit_wavelength) < 0.0001,
             (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < 0.0001,
-            cls.detector1_id==detector1_id, cls.detector2_id==detector2_id, cls.detector3_id==detector3_id).all()
+                                                    / grating_tilt) < 0.0001).all()
 
         if instrument_setup_object == []:
             instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order, detector1_id, detector2_id, detector3_id)
+                                            grating_order)
             session.add(instrument_setup_object)
             session.commit()
+
+            for fits_extension_id in xrange(1, len(fits_object.fits_data)):
+                current_detector_id = GMOSDetector.from_fits_object(fits_object, fits_extension_id).id
+                session.add(GMOSMOSInstrumentSetup2Detector(instrument_setup_id=instrument_setup_object.id,
+                                                            fits_extension_id=fits_extension_id,
+                                                            detector_id=current_detector_id))
+            session.commit()
+
+
+
             return instrument_setup_object
 
         elif len(instrument_setup_object) == 1:
@@ -309,19 +325,21 @@ class GMOSMOSInstrumentSetup(Base):
             raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
 
 
-
+    @property
+    def detectors(self):
+        session = object_session(self)
+        detectors = session.query(GMOSDetector).join(GMOSMOSInstrumentSetup2Detector).\
+            filter(GMOSMOSInstrumentSetup2Detector.instrument_setup_id==self.id).all()
+        return detectors
 
     def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
-                 grating_order, detector1_id, detector2_id, detector3_id):
+                 grating_order):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
-        self.detector1_id = detector1_id
-        self.detector2_id = detector2_id
-        self.detector3_id = detector3_id
 
     def __getattr__(self, item):
         if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
@@ -329,7 +347,7 @@ class GMOSMOSInstrumentSetup(Base):
             item_unit = getattr(self, '%s_unit' % item)
             return units.Quantity(item_value, item_unit)
         else:
-            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
+            return self.__getattribute__(item)
 
     @misc.lazyproperty
     def x_binning(self):
@@ -343,17 +361,54 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def anamorphic_factor(self):
-        return np.sin((self.grating_tilt + 50 * units.degree).to('rad').value) / np.sin(self.grating_tile.to('rad').value)
+        return np.sin((self.calculated_grating_tilt + 50 * units.degree).to('rad').value) / \
+               np.sin(self.calculated_grating_tilt.to('rad').value)
+
 
     @misc.lazyproperty
-    def calculated_tilt(self):
-        raise NotImplementedError('not implemented for now')
+    def grating_equation_coefficient(self):
+        return (self.grating.ruling_density * self.grating_central_wavelength).to(1).value
+
 
     @misc.lazyproperty
-    def resolution(self):
-        raise NotImplementedError('not implemented for now')
-        #return 206265 * ()
+    def calculated_grating_tilt(self):
+        return grating_equation_interpolator(self.grating_equation_coefficient) * units.degree
 
+
+    @misc.lazyproperty
+    def wavelength_start(self):
+        wavelength_start_value = np.max([item.to('nm').value for item in [self.filter1.wavelength_start,
+                                                                          self.filter2.wavelength_start,
+                                                                          self.grating.wavelength_start]])
+        return wavelength_start_value * units.Unit('nm')
+
+    @misc.lazyproperty
+    def wavelength_end(self):
+        wavelength_end_value = np.min([item.to('nm').value for item in [self.filter1.wavelength_end,
+                                                                        self.filter2.wavelength_end,
+                                                                        self.detector3.spectral_cutoff,
+                                                                        self.grating.wavelength_end]])
+        return wavelength_end_value * units.Unit('nm')
+
+    def calculate_resolution(self, slit_width):
+        """
+            Calculate resolution
+
+            Parameters
+            ----------
+
+            slit_width : `~astropy.units.Quantity`
+                angle
+        """
+        return self.grating_equation_coefficient / (slit_width.to('rad').value * 81.0 *
+                                             np.sin(self.calculated_grating_tilt.to('rad').value))
+
+    @misc.lazyproperty
+    def spectral_pixel_scale(self):
+        xscale = self.x_binning * self.detector1.pixel_scale.to('rad/pix').value
+        spectral_pixel_scale_value = self.anamorphic_factor * xscale * self.grating_central_wavelength.to('nm').value * \
+            81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
+        return spectral_pixel_scale_value * units.Unit('nm/pix')
 
 
 
