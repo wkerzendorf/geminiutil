@@ -49,24 +49,51 @@ class GMOSPrepare(object): # will be base when we know what
             current_amplifier = fits_data[i]
             detector = gmos_raw_object.instrument_setup.detectors[i - 1]
 
+
+
+            #####
+            # Subtracting Overscan
+            #####
             amplifier_data = prepare.correct_overscan(current_amplifier, 
                                                       self.bias_subslice, 
                                                       self.data_subslice,
                                                       self.bias_clip_sigma)
+            #####
+            #Correcting the amplifier data gain
+            #####
+
             amplifier_data = prepare.correct_gain(amplifier_data, gain=detector.gain)
             amplifier_data.name = 'DATA_%d' % i
             bias_uncertainty = amplifier_data.header['BIASSTD']
-            # ***TODO*** bias uncertainty should not be here, since this is correlated 
+
+
+            #####
+            #Create uncertainty Frame
+            ####
+            # ***TODO*** bias uncertainty should not be here, since this is correlated
             # for all pixels.  What is important later is a flat field/sensitivity error.
+
             amplifier_uncertainty = create_uncertainty_frame(amplifier_data, readout_noise=detector.readout_noise,
                                                              bias_uncertainty=bias_uncertainty)
 
             amplifier_uncertainty.name = 'UNCERTAINTY_%d' % i
 
+            ####
+            #CREATE MASK FRAME
+            ####
+
+            # TODO add BPM from gmos_data
+
             amplifier_mask = create_mask(amplifier_data)
             amplifier_mask.name = 'MASK_%d' %i
 
             final_hdu_list += [amplifier_data, amplifier_uncertainty, amplifier_mask]
+        ######
+        #MOSAICING DATA
+        #####
+        final_hdu_list = fits.HDUList(final_hdu_list)
+        final_hdu_list = prepare.mosaic(final_hdu_list, chip_gap=gmos_raw_object.instrument_setup.chip_gap)
+
 
         fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
         return FITSFile.from_fits_file(full_path)

@@ -43,18 +43,18 @@ def mosaic(fits_data, chip_gap):
         new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
 
         if new_uncertainty is not None:
-            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.data
+            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.array
 
         if new_mask is not None:
             new_mask[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.mask
 
-    new_fits_data.append(fits.ImageHDU(data=new_data, header=gmos_ccd.chips[0].header, name='DATA'))
+    new_fits_data.append(fits.ImageHDU(data=new_data, header=fits_data[1].header, name='DATA'))
 
     if new_uncertainty is not None:
-        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=gmos_ccd.chips[0].header, name='UNCERTAINTY'))
+        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=fits_data[1].header, name='UNCERTAINTY'))
 
     if new_mask is not None:
-        new_fits_data.append(fits.ImageHDU(data=new_mask, header=gmos_ccd.chips[0].header, name='MASK'))
+        new_fits_data.append(fits.ImageHDU(data=new_mask, header=fits_data[1].header, name='MASK'))
 
     return fits.HDUList(new_fits_data)
 

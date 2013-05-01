@@ -299,7 +299,7 @@ class GMOSMOSInstrumentSetup(Base):
         instrument_setup2detector = []
 
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
-            cls.grating_id==grating_id,
+            cls.grating_id==grating_id, cls.instrument_id==instrument_id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
                                                     / grating_central_wavelength) < 0.0001,
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
@@ -309,7 +309,7 @@ class GMOSMOSInstrumentSetup(Base):
 
         if instrument_setup_object == []:
             instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order)
+                                            grating_order, instrument_id)
             session.add(instrument_setup_object)
             session.commit()
 
@@ -339,13 +339,14 @@ class GMOSMOSInstrumentSetup(Base):
         return detectors
 
     def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
-                 grating_order):
+                 grating_order, instrument_id):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
+        self.instrument_id = instrument_id
 
     def __getattr__(self, item):
         if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
@@ -357,13 +358,13 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def x_binning(self):
-        x_binnings = [detector.x_binning for detector in self.detectors]
+        x_binnings = np.array([detector.x_binning for detector in self.detectors])
         assert np.all(x_binnings == x_binnings[0])
         return x_binnings[0]
 
     @misc.lazyproperty
     def y_binning(self):
-        y_binnings = [detector.y_binning for detector in self.detectors]
+        y_binnings = np.array([detector.y_binning for detector in self.detectors])
         assert np.all(y_binnings == y_binnings[0])
         return y_binnings[0]
 
@@ -397,6 +398,13 @@ class GMOSMOSInstrumentSetup(Base):
                                                                         self.detector3.spectral_cutoff,
                                                                         self.grating.wavelength_end]])
         return wavelength_end_value * units.Unit('nm')
+
+    @misc.lazyproperty
+    def chip_gap(self):
+        if self.x_binning == 1:
+            return detector_information['chip_gap']['unbinned']
+        elif self.x_binning > 1:
+            return np.int(np.round(detector_information['chip_gap']['binned'] / self.x_binning))
 
     def calculate_resolution(self, slit_width):
         """

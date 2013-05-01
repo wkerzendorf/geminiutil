@@ -25,7 +25,7 @@ spectral_cutoff:
 #chip_placement:
 
 
-chipgap:
+chip_gap:
   unbinned: 37
   binned: 36
 
