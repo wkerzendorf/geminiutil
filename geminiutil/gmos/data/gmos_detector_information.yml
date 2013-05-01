@@ -22,3 +22,11 @@ spectral_cutoff:
     e2vdd : 1050 #nm
     hamamatsu : 1080 #nm
 
+
+chipgap:
+  unbinned: 37
+  binned: 36
+
+y-distortion:
+  gmos-s: [0.99911, -1.7465e-5, 3.0494e-7]
+  gmos-n: [0.99591859227, 5.3042211333437e-8, 1.7447902551997e-7]
