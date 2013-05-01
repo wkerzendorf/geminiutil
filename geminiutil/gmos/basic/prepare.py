@@ -3,11 +3,50 @@ import astropy.stats.funcs as stats
 import numpy as np
 import warnings
 
+from collections import OrderedDict
+
+from astropy.nddata import StdDevUncertainty, NDData
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 warnings.filterwarnings('ignore', message='.+ a HIERARCH card will be created.')
 
 
-def mosaic(fits_data):
-    pass
+def mosaic(fits_data, chip_gap):
+    logging.warning('Mosaicing not complete - data remains unshifted - to be implemented')
+    gmos_ccd = GMOSCCDImage.from_fits_data(fits_data)
+    number_of_ccds = len(gmos_ccd.chips)
+    data_xs = [item.data.shape[1] for item in gmos_ccd.chips]
+    new_data_x = np.sum(data_xs) + chip_gap * (number_of_ccds - 1)
+    new_data_y = gmos_ccd.chips[0].data.shape[0]
+    new_data_shape = (new_data_y, new_data_x)
+
+
+    data_starts = np.hstack(([0], np.cumsum(data_xs)))[:-1]
+    data_starts += np.arange(number_of_ccds) * chip_gap
+    new_data = np.zeros(new_data_shape)
+
+    if gmos_ccd.chips[0].uncertainty is not None:
+        new_uncertainty = np.zeros(new_data_shape)
+    else:
+        new_uncertainty = None
+
+    if gmos_ccd.chips[0].mask is not None:
+        new_mask = np.zeros(new_data_shape)
+    else:
+        new_mask = None
+
+    for i, amplifier in enumerate(gmos_ccd.chips):
+        new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
+
+    return new_data
+
+
+
+
+
 
 def prepare(image, bias_subslice=[slice(None), slice(1,11)], 
             data_subslice=[slice(None), slice(-1)], clip=3.,
@@ -354,3 +393,35 @@ def multiext_data(im):
 def multiext_header_value(im, key):
     """Return headers from multiple extensions as 3-dimensional array."""
     return np.array([header_value(ext, key)[np.newaxis,:] for ext in im[1:]])
+
+class GMOSCCDImage(object):
+
+    @classmethod
+    def from_fits_data(cls, fits_data):
+        #searching for independent datasets:
+        chips = []
+        meta = OrderedDict(fits_data[0].header.copy())
+        for chip_id in xrange(1, 4):
+            data = fits_data['data_%d' % chip_id].data
+
+            if fits_data['uncertainty_%d' % chip_id].header['uncertainty_type'] == 'stddev':
+                uncertainty = StdDevUncertainty(fits_data['uncertainty_%d' % chip_id].data)
+
+            mask = fits_data['mask_%d' % chip_id].data.astype(bool)
+
+            chips.append(NDData(data, uncertainty=uncertainty, mask=mask))
+
+        return cls(chips, meta)
+
+
+    def __init__(self, chips, meta):
+        self.chips = chips
+        self.meta = meta
+
+        for chip in self.chips:
+            chip.meta = meta
+
+
+    def __add__(self, other):
+        if not isinstance(other, GMOSCCDImage):
+            raise TypeError

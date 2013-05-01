@@ -48,12 +48,6 @@ class GMOSPrepare(object): # will be base when we know what
         for i in xrange(1, len(fits_data)):
             current_amplifier = fits_data[i]
             detector = gmos_raw_object.instrument_setup.detectors[i - 1]
-            if detector.readout_direction.lower() == 'left':
-                isleftamp = True
-            elif detector.readout_direction.lower() == 'right':
-                isleftamp = False
-            else:
-                raise ValueError('readout direction is unknown string: %s' % detector.readout_direction.lower())
 
             amplifier_data = prepare.correct_overscan(current_amplifier, 
                                                       self.bias_subslice, 
@@ -171,35 +165,3 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
 def gmos_ccd_image_arithmetic(func, *args):
     pass
 
-class GMOSCCDImage(object):
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        #searching for independent datasets:
-        fits_data = fits_object.fits_data
-        chips = []
-        meta = OrderedDict(fits_data[0].header.copy())
-        for chip_id in xrange(1, 4):
-            data = fits_data['data_%d' % chip_id].data
-
-            if fits_data['uncertainty_%d' % chip_id].header['uncertainty_type'] == 'stddev':
-                uncertainty = StdDevUncertainty(fits_data['uncertainty_%d' % chip_id].data)
-
-            mask = fits_data['mask_%d' % chip_id].data.astype(bool)
-
-            chips.append(NDData(data, uncertainty=uncertainty, mask=mask))
-
-        return cls(chips, meta)
-
-
-    def __init__(self, chips, meta):
-        self.chips = chips
-        self.meta = meta
-
-        for chip in self.chips:
-            chip.meta = meta
-
-
-    def __add__(self, other):
-        if not isinstance(other, GMOSCCDImage):
-            raise TypeError
