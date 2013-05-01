@@ -22,6 +22,8 @@ spectral_cutoff:
     e2vdd : 1050 #nm
     hamamatsu : 1080 #nm
 
+#chip_placement:
+
 
 chipgap:
   unbinned: 37

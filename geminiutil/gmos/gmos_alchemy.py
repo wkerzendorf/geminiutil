@@ -249,6 +249,8 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating_order = Column(Integer)
 
+    instrument_id = Column(Integer, ForeignKey('instrument.id'))
+
     #instrument_setup2detector_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup2gmosdetector.id'))
 
     filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter1_id),
@@ -259,7 +261,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating = relationship(GMOSGrating)
 
-
+    instrument = relationship(base.Instrument)
 
 
     @classmethod
@@ -290,6 +292,10 @@ class GMOSMOSInstrumentSetup(Base):
 
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
+
+        instrument_id = base.Instrument.from_fits_object(fits_object).id
+
+
         instrument_setup2detector = []
 
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
@@ -351,13 +357,15 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def x_binning(self):
-        assert self.detector1.x_binning == self.detector2.x_binning == self.detector3.x_binning
-        return self.detector1.x_binning
+        x_binnings = [detector.x_binning for detector in self.detectors]
+        assert np.all(x_binnings == x_binnings[0])
+        return x_binnings[0]
 
     @misc.lazyproperty
     def y_binning(self):
-        assert self.detector1.y_binning == self.detector2.y_binning == self.detector3.y_binning
-        return self.detector1.y_binning
+        y_binnings = [detector.y_binning for detector in self.detectors]
+        assert np.all(y_binnings == y_binnings[0])
+        return y_binnings[0]
 
     @misc.lazyproperty
     def anamorphic_factor(self):
