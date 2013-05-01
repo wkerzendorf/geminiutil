@@ -420,8 +420,17 @@ class GMOSMOSInstrumentSetup(Base):
                                              np.sin(self.calculated_grating_tilt.to('rad').value))
 
     @misc.lazyproperty
+    def x_scale(self):
+        return self.detectors[1].pixel_scale * self.x_binning
+
+    @misc.lazyproperty
+    def y_scale(self):
+        return self.detectors[1].pixel_scale * self.y_binning
+
+
+    @misc.lazyproperty
     def spectral_pixel_scale(self):
-        xscale = self.x_binning * self.detector1.pixel_scale.to('rad/pix').value
+        xscale = self.x_scale.to('rad/pix').value
         spectral_pixel_scale_value = self.anamorphic_factor * xscale * self.grating_central_wavelength.to('nm').value * \
             81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
         return spectral_pixel_scale_value * units.Unit('nm/pix')

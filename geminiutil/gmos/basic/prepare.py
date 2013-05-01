@@ -440,3 +440,5 @@ class GMOSCCDImage(object):
     def __add__(self, other):
         if not isinstance(other, GMOSCCDImage):
             raise TypeError
+
+

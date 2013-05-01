@@ -1,5 +1,5 @@
 from .. import base
-from ..base import BaseProject
+from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
 import logging
 from datetime import datetime
@@ -17,12 +17,22 @@ class GMOSMOSProject(BaseProject):
     def __init__(self, database_string, echo=False):
         super(GMOSMOSProject, self).__init__(database_string, GMOSMOSRawFITS, echo=echo)
 
-
+    @property
+    def observation_class(self):
+        return zip(*self.session.query(base.ObservationClass.name).all())[0]
 
     @property
-    def science(self):
-        return self.session.query(base.ObservationClass).filter_by(name='science').one().raw_fits
+    def observation_types(self):
+        return zip(*self.session.query(base.ObservationType.name).all())[0]
 
+
+    def __getattr__(self, item):
+        if item in self.observation_types:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationType).filter(ObservationType.name==item).all()
+        elif item in self.observation_class:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).filter(ObservationClass.name==item).all()
+        else:
+            return self.__getattribute__(item)
 
     def classify_added_fits(self, current_fits):
         fits_object = self.add_gmos_raw_fits(current_fits)
