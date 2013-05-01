@@ -37,11 +37,26 @@ def mosaic(fits_data, chip_gap):
         new_mask = np.zeros(new_data_shape)
     else:
         new_mask = None
+    new_fits_data = [fits_data[0]]
 
     for i, amplifier in enumerate(gmos_ccd.chips):
         new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
 
-    return new_data
+        if new_uncertainty is not None:
+            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.data
+
+        if new_mask is not None:
+            new_mask[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.mask
+
+    new_fits_data.append(fits.ImageHDU(data=new_data, header=gmos_ccd.chips[0].header, name='DATA'))
+
+    if new_uncertainty is not None:
+        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=gmos_ccd.chips[0].header, name='UNCERTAINTY'))
+
+    if new_mask is not None:
+        new_fits_data.append(fits.ImageHDU(data=new_mask, header=gmos_ccd.chips[0].header, name='MASK'))
+
+    return fits.HDUList(new_fits_data)
 
 
 
