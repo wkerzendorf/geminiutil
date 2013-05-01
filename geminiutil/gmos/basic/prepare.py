@@ -6,6 +6,9 @@ import warnings
 warnings.filterwarnings('ignore', message='.+ a HIERARCH card will be created.')
 
 
+def mosaic(fits_data):
+    pass
+
 def prepare(image, bias_subslice=[slice(None), slice(1,11)], 
             data_subslice=[slice(None), slice(-1)], clip=3.,
             gain=None, read_noise=None, combine=True, 
@@ -72,8 +75,8 @@ def prepare(image, bias_subslice=[slice(None), slice(1,11)],
                                   in zip(outlist[1::2], outlist[2::2])]
     return fits.HDUList(outlist)
 
-def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
-                     data_subslice=[slice(None), slice(-1)], clip=3.):
+def correct_overscan(amplifier,  bias_slice=None,
+                     data_slice=None, clip=3.):
     """Extract bias-corrected, exposed parts of raw GMOS fits file
 
     Bias is determined from selected regions of overscan, clipping outliers
@@ -114,13 +117,21 @@ def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
     DETSEC:   the part of the overall array represented by the data section
     """
 
-    isleftamp = 'left' in amplifier.header['AMPNAME']
-    bias_slice = sub_slices(sec2slice(amplifier.header['BIASSEC']),
-                            adjust_subslices(bias_subslice, reverse1=isleftamp))
-    data_slice = sub_slices(sec2slice(amplifier.header['DATASEC']),
-                            adjust_subslices(data_subslice, reverse1=isleftamp))
+#    isleftamp = 'left' in amplifier.header['AMPNAME']
+    if bias_slice is None:
+        bias_slice = sec2slice(amplifier.header['BIASSEC'])
+
+    if data_slice is None:
+        data_slice = sec2slice(amplifier.header['DATASEC'])
+
+    #bias_slice = sub_slices(sec2slice(amplifier.header['BIASSEC']),
+    #                        adjust_subslices(bias_subslice, reverse1=isleftamp))
+    #data_slice = sub_slices(sec2slice(amplifier.header['DATASEC']),
+    #                        adjust_subslices(data_subslice, reverse1=isleftamp))
+    #1/0
 
     overscan = amplifier.data[bias_slice]
+
     if clip:
         clipped = stats.sigma_clip(overscan, clip, 1, maout='inplace')
     else:
@@ -135,11 +146,11 @@ def correct_overscan(amplifier, bias_subslice=[slice(None), slice(1,11)],
     outamp.header['CRPIX1'] += data_slice[1].start
     outamp.header['CRPIX2'] += data_slice[0].start
     binning = np.fromstring(amplifier.header['CCDSUM'], sep=' ', dtype=np.int)
-    ccd_subslice = adjust_subslices(data_subslice, binning, reverse1=isleftamp)
-    outamp.header['CCDSEC'] = slice2sec(
-        sub_slices(sec2slice(amplifier.header['CCDSEC']), ccd_subslice))
-    outamp.header['DETSEC'] = slice2sec(
-        sub_slices(sec2slice(amplifier.header['DETSEC']), ccd_subslice))
+    #ccd_subslice = adjust_subslices(data_subslice, binning, reverse1=isleftamp)
+    #outamp.header['CCDSEC'] = slice2sec(
+    #    sub_slices(sec2slice(amplifier.header['CCDSEC']), ccd_subslice))
+    #outamp.header['DETSEC'] = slice2sec(
+    #    sub_slices(sec2slice(amplifier.header['DETSEC']), ccd_subslice))
     outamp.header.pop('DATASEC') # all of image is now DATA
     outamp.header.pop('BIASSEC') # no BIAS section left
     outamp.header['APPLIED DATASEC'] \

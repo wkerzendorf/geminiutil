@@ -27,8 +27,8 @@ class GMOSPrepare(object): # will be base when we know what
 
     file_prefix = 'prep'
 
-    def __init__(self, bias_subslice=[slice(None), slice(1, 11)], 
-                 data_subslice=[slice(None), slice(-1)],
+    def __init__(self, bias_subslice=None,
+                 data_subslice=None,
                  bias_clip_sigma=3.):
         self.bias_subslice = bias_subslice
         self.data_subslice = data_subslice
@@ -164,7 +164,7 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
     if max_data is not None:
         mask_data |= amplifier.data > max_data
 
-    mask_data = mask_data.astype(dtype=np.unit8)
+    mask_data = mask_data.astype(dtype=np.uint8)
 
     return fits.ImageHDU(mask_data, header=amplifier.header)
 
