@@ -9,13 +9,13 @@ arcsecpermm : 1.611444 arcsec/mm
 
 pixel_scale:
 
-  #gmos-n:
+  gmos-n:
     eev : 0.0727 #arcsec/pixel
     e2vdd : 0.07288 #arcsec/pixel
     hamamatsu : 0.0727 #arcsec/pixel
 
-  #gmos-s:
-  #  eev : 0.073 #arcsec/pixel
+  gmos-s:
+    eev : 0.073 #arcsec/pixel
 
 spectral_cutoff:
     eev : 1025 #nm
