@@ -412,6 +412,14 @@ class GMOSMOSInstrumentSetup(Base):
         return self.grating.y_offset / self.y_binning
 
     @misc.lazyproperty
+    def y_distortion_coefficients(self):
+        return detector_information['y-distortion'][self.instrument.name]
+
+    @misc.lazyproperty
+    def arcsecpermm(self):
+        return detector_information['arcsecpermm'] * units.Unit('arcsec/mm')
+
+    @misc.lazyproperty
     def chip_gap(self):
         if self.x_binning == 1:
             return detector_information['chip_gap']['unbinned']

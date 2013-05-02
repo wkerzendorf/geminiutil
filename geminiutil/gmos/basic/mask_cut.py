@@ -88,7 +88,7 @@ def cut_slits(data, mdf_table, uncertainty=None, mask=None, return_cut_image=Fal
 
         if mask is not None:
             mask_slice = mask[current_slice]
-            final_hdu_list.append(fits.ImageHDU(mask_slice, name='MASK_%d'))
+            final_hdu_list.append(fits.ImageHDU(mask_slice, name='MASK_%d' % i))
     if return_cut_image:
         return cut_image, final_hdu_list
     else:

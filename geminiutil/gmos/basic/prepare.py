@@ -34,7 +34,7 @@ def mosaic(fits_data, chip_gap):
         new_uncertainty = None
 
     if gmos_ccd.chips[0].mask is not None:
-        new_mask = np.zeros(new_data_shape)
+        new_mask = np.zeros(new_data_shape).astype(bool)
     else:
         new_mask = None
     new_fits_data = [fits_data[0]]
@@ -55,7 +55,7 @@ def mosaic(fits_data, chip_gap):
 
     if new_mask is not None:
         new_mask |= np.isnan(new_data)
-        new_fits_data.append(fits.ImageHDU(data=new_mask, header=fits_data[1].header, name='MASK'))
+        new_fits_data.append(fits.ImageHDU(data=new_mask.astype(np.uint8), header=fits_data[1].header, name='MASK'))
 
     new_data[np.isnan(new_data)] = 0.0
 

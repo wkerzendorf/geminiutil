@@ -5,7 +5,7 @@ detector_type:
   eev : "SDSU II CCD"
   e2vdd : "SDSU II e2v DD CCD42-90"
 
-arcsecpermm : 1.611444 arcsec/mm
+arcsecpermm : 1.611444 #arcsec/mm
 
 pixel_scale:
 
