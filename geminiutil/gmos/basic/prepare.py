@@ -3,68 +3,7 @@ import astropy.stats.funcs as stats
 import numpy as np
 import warnings
 
-from collections import OrderedDict
-
-from astropy.nddata import StdDevUncertainty, NDData
-
-import logging
-
-logger = logging.getLogger(__name__)
-
 warnings.filterwarnings('ignore', message='.+ a HIERARCH card will be created.')
-
-
-def mosaic(fits_data, chip_gap):
-    logging.warning('Mosaicing not complete - data remains unshifted - to be implemented')
-    gmos_ccd = GMOSCCDImage.from_fits_data(fits_data)
-    number_of_ccds = len(gmos_ccd.chips)
-    data_xs = [item.data.shape[1] for item in gmos_ccd.chips]
-    new_data_x = np.sum(data_xs) + chip_gap * (number_of_ccds - 1)
-    new_data_y = gmos_ccd.chips[0].data.shape[0]
-    new_data_shape = (new_data_y, new_data_x)
-
-
-    data_starts = np.hstack(([0], np.cumsum(data_xs)))[:-1]
-    data_starts += np.arange(number_of_ccds) * chip_gap
-    new_data = np.zeros(new_data_shape) * np.nan
-
-    if gmos_ccd.chips[0].uncertainty is not None:
-        new_uncertainty = np.zeros(new_data_shape)
-    else:
-        new_uncertainty = None
-
-    if gmos_ccd.chips[0].mask is not None:
-        new_mask = np.zeros(new_data_shape).astype(bool)
-    else:
-        new_mask = None
-    new_fits_data = [fits_data[0]]
-
-    for i, amplifier in enumerate(gmos_ccd.chips):
-        new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
-
-        if new_uncertainty is not None:
-            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.array
-
-        if new_mask is not None:
-            new_mask[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.mask
-
-    new_fits_data.append(fits.ImageHDU(data=new_data, header=fits_data[1].header, name='DATA'))
-
-    if new_uncertainty is not None:
-        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=fits_data[1].header, name='UNCERTAINTY'))
-
-    if new_mask is not None:
-        new_mask |= np.isnan(new_data)
-        new_fits_data.append(fits.ImageHDU(data=new_mask.astype(np.uint8), header=fits_data[1].header, name='MASK'))
-
-    new_data[np.isnan(new_data)] = 0.0
-
-    return fits.HDUList(new_fits_data)
-
-
-
-
-
 
 def prepare(image, bias_subslice=[slice(None), slice(1,11)], 
             data_subslice=[slice(None), slice(-1)], clip=3.,
@@ -110,8 +49,14 @@ def prepare(image, bias_subslice=[slice(None), slice(1,11)],
     gain = gain if gain is not None else [None]*(len(image)-1)
     read_noise = read_noise if read_noise is not None else [None]*(len(image)-1)
     for amp, ampgain, ampron in zip(image[1:], gain, read_noise):
-        bias_corrected = correct_overscan(amp, bias_subslice, data_subslice, 
-                                          clip)
+        isleftamp = 'left' in amp.header['AMPNAME']
+        bias_slice = slice_slices(sec2slice(amp.header['BIASSEC']),
+                                  adjust_subslices(bias_subslice, 
+                                                   reverse1=isleftamp))
+        data_slice = slice_slices(sec2slice(amp.header['DATASEC']),
+                                  adjust_subslices(data_subslice, 
+                                                   reverse1=isleftamp))
+        bias_corrected = correct_overscan(amp, bias_slice, data_slice, clip)
         gain_corrected = correct_gain(bias_corrected, ampgain)
         if ampron is not None:
             gain_corrected.header['RDNOISE'] = ampron
@@ -132,8 +77,7 @@ def prepare(image, bias_subslice=[slice(None), slice(1,11)],
                                   in zip(outlist[1::2], outlist[2::2])]
     return fits.HDUList(outlist)
 
-def correct_overscan(amplifier,  bias_slice=None,
-                     data_slice=None, clip=3.):
+def correct_overscan(amplifier,  bias_slice=None, data_slice=None, clip=3.):
     """Extract bias-corrected, exposed parts of raw GMOS fits file
 
     Bias is determined from selected regions of overscan, clipping outliers
@@ -141,13 +85,12 @@ def correct_overscan(amplifier,  bias_slice=None,
     Parameters
     ----------
     amplifier: ~fits.ImageHDU
-    bias_subslice: list of 2 slices
-        slices in Y, X within the overscan region given in the 
-        extension header 'BIASSEC' to use for determining the bias level
-        (default: all Y, 1:11 in X, relative to far end of the overscan) 
-    data_subslice: list of 2 slices
-        good parts of the array, relative to header 'DATASEC'
-        (default: all Y, 0:-1 in X, i.e., all but first column read-out)
+    bias_slice: list of 2 slices
+        slices in Y, X to use for determining the bias level
+        (default=None: use 'BIASSEC' from header) 
+    data_slice: list of 2 slices
+        slices in Y, X that give good parts of the array
+        (default=None: use 'DATASEC' from header)
     clip: ~float
         number of standard deviations from the median within which overscan
         values have to be to be included.  
@@ -174,18 +117,20 @@ def correct_overscan(amplifier,  bias_slice=None,
     DETSEC:   the part of the overall array represented by the data section
     """
 
-#    isleftamp = 'left' in amplifier.header['AMPNAME']
     if bias_slice is None:
         bias_slice = sec2slice(amplifier.header['BIASSEC'])
 
     if data_slice is None:
         data_slice = sec2slice(amplifier.header['DATASEC'])
-
-    #bias_slice = sub_slices(sec2slice(amplifier.header['BIASSEC']),
-    #                        adjust_subslices(bias_subslice, reverse1=isleftamp))
-    #data_slice = sub_slices(sec2slice(amplifier.header['DATASEC']),
-    #                        adjust_subslices(data_subslice, reverse1=isleftamp))
-    #1/0
+        data_subslice = None
+    else:
+        # ensure we get numbers only, rather than relative indices,
+        # otherwise cannot store it as DATASEC header later
+        data_slice = [slice(*s.indices(shape)) for s, shape 
+                            in zip(data_slice, amplifier.data.shape)]
+        # get equivalent subslice of 'DATASEC' for updating CCDSEC, DETSEC
+        data_subslice = get_subslices(sec2slice(amplifier.header['DATASEC']),
+                                      data_slice)
 
     overscan = amplifier.data[bias_slice]
 
@@ -200,16 +145,7 @@ def correct_overscan(amplifier,  bias_slice=None,
     outamp = fits.ImageHDU(amplifier.data[data_slice]-bias_estimate,
                            amplifier.header)
 
-    outamp.header['CRPIX1'] += data_slice[1].start
-    outamp.header['CRPIX2'] += data_slice[0].start
-    binning = np.fromstring(amplifier.header['CCDSUM'], sep=' ', dtype=np.int)
-    #ccd_subslice = adjust_subslices(data_subslice, binning, reverse1=isleftamp)
-    #outamp.header['CCDSEC'] = slice2sec(
-    #    sub_slices(sec2slice(amplifier.header['CCDSEC']), ccd_subslice))
-    #outamp.header['DETSEC'] = slice2sec(
-    #    sub_slices(sec2slice(amplifier.header['DETSEC']), ccd_subslice))
-    outamp.header.pop('DATASEC') # all of image is now DATA
-    outamp.header.pop('BIASSEC') # no BIAS section left
+    # add new headers with information on what was done
     outamp.header['APPLIED DATASEC'] \
         = slice2sec(data_slice), 'Section considered good'
     outamp.header['APPLIED BIASSEC'] \
@@ -217,6 +153,19 @@ def correct_overscan(amplifier,  bias_slice=None,
     outamp.header['BIAS'] = bias_estimate, 'ADU'
     outamp.header['BIASSTD'] = bias_std, 'ADU'
     outamp.header['BIASUNC'] = bias_unc, 'ADU'
+    # adjust remove/existing headers as appropriate
+    outamp.header.remove('BIASSEC') # no BIAS section left
+    outamp.header.remove('DATASEC') # all of image is now DATA
+    outamp.header['CRPIX1'] += data_slice[1].start
+    outamp.header['CRPIX2'] += data_slice[0].start
+    if data_subslice is not None:
+        binning = np.fromstring(amplifier.header['CCDSUM'], sep=' ', 
+                                dtype=np.int)
+        ccd_subslice = adjust_subslices(data_subslice, binning)
+        outamp.header['CCDSEC'] = slice2sec(slice_slices(
+            sec2slice(amplifier.header['CCDSEC']), ccd_subslice))
+        outamp.header['DETSEC'] = slice2sec(slice_slices(
+            sec2slice(amplifier.header['DETSEC']), ccd_subslice))
 
     return outamp
 
@@ -263,9 +212,9 @@ def combine_halves(amp1, amp2):
     Notes
     -----
     Updates headers:
-      DETSEC, DATATYP
+      CCDSEC, DETSEC, DATATYP
     Renames amplifier specific one by prefixing HIERARCH LEFT, HIERARCH RIGHT:
-      AMPNAME, FRMNAME, FRAMEID, CCDSEC, APPLIED DATASEC, APPLIED BIASSEC
+      AMPNAME, FRMNAME, FRAMEID, APPLIED DATASEC, APPLIED BIASSEC
       BIAS, BIASSTD, BIASUNC, GAIN, APPLIED GAIN, RDNOISE 
     Also creates HIERARCH LEFT DATASEC and HIERARCH RIGHT DATASEC
     """
@@ -277,9 +226,9 @@ def combine_halves(amp1, amp2):
     chip = fits.ImageHDU(np.hstack([left.data, right.data]), left.header)
 
     # rename amplifier specific keys to left/right pairs
-    for key in ('AMPNAME', 'FRMNAME', 'FRAMEID', 'CCDSEC', 'GAIN', 'RDNOISE',
+    for key in ('AMPNAME', 'FRMNAME', 'FRAMEID', 'GAIN', 'RDNOISE',
                 'APPLIED BIASSEC', 'BIAS', 'BIASSTD', 'BIASUNC',
-                'APPLIED DATASEC', 'APPLIED GAIN'):
+                'CCDSEC', 'DETSEC', 'APPLIED DATASEC', 'APPLIED GAIN'):
         if key in ('CCDSEC', 'DETSEC'):
             ls, rs = sec2slice(left.header[key]), sec2slice(right.header[key])
             if ls[0] == rs[0] and ls[1].stop == rs[1].start:
@@ -316,15 +265,27 @@ def reverse_slice(in_slice):
     return slice(None if in_slice.stop is None else -in_slice.stop, 
                  None if in_slice.start is None else -in_slice.start)
 
-def sub_slices(slices1, subslices):
+def get_subslices(slices1, slices2):
+    """Get subslices of slices1 such that a[slices1][out]==a[slices2]"""
+    if slices2 is None: return slices1
+    return [get_subslice(slice1, slice2) 
+            for slice1, slice2 in zip(slices1, slices2)]
+
+def get_subslice(slice1, slice2):
+    assert slice1.start <= slice2.start and slice1.stop >= slice2.stop
+    return slice(None if slice2.start==slice1.start 
+                 else slice2.start-slice1.start,
+                 None if slice2.stop==slice1.stop else slice2.stop-slice1.stop)
+
+def slice_slices(slices1, subslices):
     """Get subslices of slices, such that a[out]==a[slice1][subslices]
     Both slices1 and subslices are lists of slices."""
     if subslices is None: return slices1
-    return [sub_slice(slice1, subslice) 
+    return [slice_slice(slice1, subslice) 
             for slice1, subslice in zip(slices1, subslices)]
 
-def sub_slice(slice1, subslice):
-    """Get a subslice of a slice, such that a[out]==a[slice1][subslices]
+def slice_slice(slice1, subslice):
+    """Get a subslice of a slice, such that a[out]==a[slice1][subslice]
     
     Parameters
     ----------
@@ -411,37 +372,3 @@ def multiext_data(im):
 def multiext_header_value(im, key):
     """Return headers from multiple extensions as 3-dimensional array."""
     return np.array([header_value(ext, key)[np.newaxis,:] for ext in im[1:]])
-
-class GMOSCCDImage(object):
-
-    @classmethod
-    def from_fits_data(cls, fits_data):
-        #searching for independent datasets:
-        chips = []
-        meta = OrderedDict(fits_data[0].header.copy())
-        for chip_id in xrange(1, 4):
-            data = fits_data['data_%d' % chip_id].data
-
-            if fits_data['uncertainty_%d' % chip_id].header['uncertainty_type'] == 'stddev':
-                uncertainty = StdDevUncertainty(fits_data['uncertainty_%d' % chip_id].data)
-
-            mask = fits_data['mask_%d' % chip_id].data.astype(bool)
-
-            chips.append(NDData(data, uncertainty=uncertainty, mask=mask))
-
-        return cls(chips, meta)
-
-
-    def __init__(self, chips, meta):
-        self.chips = chips
-        self.meta = meta
-
-        for chip in self.chips:
-            chip.meta = meta
-
-
-    def __add__(self, other):
-        if not isinstance(other, GMOSCCDImage):
-            raise TypeError
-
-
