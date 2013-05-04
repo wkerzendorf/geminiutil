@@ -7,7 +7,7 @@ import logging
 import os
 from collections import OrderedDict
 
-from .basic import prepare
+from .basic import prepare, mask_cut
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +27,34 @@ class GMOSPrepare(object): # will be base when we know what
 
     file_prefix = 'prep'
 
-    def __init__(self, bias_subslice=[slice(None), slice(1, 11)], 
-                 data_subslice=[slice(None), slice(-1)],
+    def __init__(self, bias_subslice=None,
+                 data_subslice=None,
                  bias_clip_sigma=3.):
         self.bias_subslice = bias_subslice
         self.data_subslice = data_subslice
         self.bias_clip_sigma = bias_clip_sigma
 
-    def __call__(self, gmos_raw_object, fname=None, destination_dir='.'):
+    def __call__(self, gmos_raw_object, fname=None, destination_dir='.', write_steps=False, write_cut_image=None):
+        """
+        Preparing the Image
+
+        Parameters
+        ----------
+
+        gmos_raw_object :
+
+        fname :
+            output filename
+
+        write_steps :
+            write out the individual steps to the individual fits files
+
+        write_cut_image :
+            write out the cut_image to a fits file with name specified in variable
+
+
+
+        """
 
         if fname is None:
             fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
@@ -48,33 +68,96 @@ class GMOSPrepare(object): # will be base when we know what
         for i in xrange(1, len(fits_data)):
             current_amplifier = fits_data[i]
             detector = gmos_raw_object.instrument_setup.detectors[i - 1]
-            if detector.readout_direction.lower() == 'left':
-                isleftamp = True
-            elif detector.readout_direction.lower() == 'right':
-                isleftamp = False
-            else:
-                raise ValueError('readout direction is unknown string: %s' % detector.readout_direction.lower())
 
+
+
+            #####
+            # Subtracting Overscan
+            #####
             amplifier_data = prepare.correct_overscan(current_amplifier, 
                                                       self.bias_subslice, 
                                                       self.data_subslice,
                                                       self.bias_clip_sigma)
+            #####
+            #Correcting the amplifier data gain
+            #####
+
             amplifier_data = prepare.correct_gain(amplifier_data, gain=detector.gain)
             amplifier_data.name = 'DATA_%d' % i
             bias_uncertainty = amplifier_data.header['BIASSTD']
-            # ***TODO*** bias uncertainty should not be here, since this is correlated 
+
+
+            #####
+            #Create uncertainty Frame
+            ####
+            # ***TODO*** bias uncertainty should not be here, since this is correlated
             # for all pixels.  What is important later is a flat field/sensitivity error.
+
             amplifier_uncertainty = create_uncertainty_frame(amplifier_data, readout_noise=detector.readout_noise,
                                                              bias_uncertainty=bias_uncertainty)
 
             amplifier_uncertainty.name = 'UNCERTAINTY_%d' % i
 
+            ####
+            #CREATE MASK FRAME
+            ####
+
+            # TODO add BPM from gmos_data
+
             amplifier_mask = create_mask(amplifier_data)
             amplifier_mask.name = 'MASK_%d' %i
 
             final_hdu_list += [amplifier_data, amplifier_uncertainty, amplifier_mask]
+        ######
+        #MOSAICING DATA
+        #####
+        final_hdu_list = fits.HDUList(final_hdu_list)
+        final_hdu_list = prepare.mosaic(final_hdu_list, chip_gap=gmos_raw_object.instrument_setup.chip_gap)
+        if write_steps:
+            mosaic_fname = 'mosaic-%s' % gmos_raw_object.fits.fname
+            final_hdu_list.writeto(os.path.join(destination_dir, mosaic_fname), clobber=True)
+        #####
+        #Cutting the Mask
+        #####
+        mdf_table = gmos_raw_object.mask.fits.fits_data['MDF'].data
+        naxis1 = final_hdu_list['DATA'].header['naxis1']
+        naxis2 = final_hdu_list['DATA'].header['naxis2']
 
-        fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
+        current_instrument_setup = gmos_raw_object.instrument_setup
+        x_scale = current_instrument_setup.x_scale
+        y_scale = current_instrument_setup.y_scale
+
+        wavelength_offset = current_instrument_setup.grating.wavelength_offset
+        spectral_pixel_scale = current_instrument_setup.spectral_pixel_scale
+        wavelength_start = current_instrument_setup.wavelength_start
+        wavelength_end = current_instrument_setup.wavelength_end
+        wavelength_central = current_instrument_setup.grating_central_wavelength
+        y_distortion_coefficients = current_instrument_setup.y_distortion_coefficients
+        y_offset = current_instrument_setup.y_offset
+        anamorphic_factor = current_instrument_setup.anamorphic_factor
+        arcsecpermm = current_instrument_setup.arcsecpermm
+        prepared_mdf_table = mask_cut.prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor,
+                                                        wavelength_offset, spectral_pixel_scale, wavelength_start,
+                                                        wavelength_central, wavelength_end,
+                                                        y_distortion_coefficients=y_distortion_coefficients,
+                                                        arcsecpermm = arcsecpermm, y_offset=y_offset)
+
+        if write_cut_image:
+            cut_image, cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
+                                            uncertainty=final_hdu_list['UNCERTAINTY'].data,
+                                            mask=final_hdu_list['MASK'].data, return_cut_image=True)
+
+            fits.ImageHDU(data=cut_image).writeto(os.path.join(destination_dir, write_cut_image), clobber=True)
+        else:
+            cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
+                                            uncertainty=final_hdu_list['UNCERTAINTY'].data,
+                                            mask=final_hdu_list['MASK'].data)
+
+
+
+
+        cut_hdu_list.insert(0, final_hdu_list[0])
+        fits.HDUList(cut_hdu_list).writeto(full_path, clobber=True)
         return FITSFile.from_fits_file(full_path)
 
 class Prepare(object):
@@ -164,8 +247,8 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
     if max_data is not None:
         mask_data |= amplifier.data > max_data
 
-    # used to return .astype(np.int64), but why? Fits should handle bools
-    # (if not, use int8 or int32)
+    mask_data = mask_data.astype(dtype=np.uint8)
+
     return fits.ImageHDU(mask_data, header=amplifier.header)
 
 def gmos_ccd_image_arithmetic(func, *args):
@@ -174,9 +257,8 @@ def gmos_ccd_image_arithmetic(func, *args):
 class GMOSCCDImage(object):
 
     @classmethod
-    def from_fits_object(cls, fits_object):
+    def from_fits_data(cls, fits_data):
         #searching for independent datasets:
-        fits_data = fits_object.fits_data
         chips = []
         meta = OrderedDict(fits_data[0].header.copy())
         for chip_id in xrange(1, 4):
@@ -203,3 +285,50 @@ class GMOSCCDImage(object):
     def __add__(self, other):
         if not isinstance(other, GMOSCCDImage):
             raise TypeError
+
+def mosaic(fits_data, chip_gap):
+    logging.warning('Mosaicing not complete - data remains unshifted - to be implemented')
+    gmos_ccd = GMOSCCDImage.from_fits_data(fits_data)
+    number_of_ccds = len(gmos_ccd.chips)
+    data_xs = [item.data.shape[1] for item in gmos_ccd.chips]
+    new_data_x = np.sum(data_xs) + chip_gap * (number_of_ccds - 1)
+    new_data_y = gmos_ccd.chips[0].data.shape[0]
+    new_data_shape = (new_data_y, new_data_x)
+
+
+    data_starts = np.hstack(([0], np.cumsum(data_xs)))[:-1]
+    data_starts += np.arange(number_of_ccds) * chip_gap
+    new_data = np.zeros(new_data_shape) * np.nan
+
+    if gmos_ccd.chips[0].uncertainty is not None:
+        new_uncertainty = np.zeros(new_data_shape)
+    else:
+        new_uncertainty = None
+
+    if gmos_ccd.chips[0].mask is not None:
+        new_mask = np.zeros(new_data_shape).astype(bool)
+    else:
+        new_mask = None
+    new_fits_data = [fits_data[0]]
+
+    for i, amplifier in enumerate(gmos_ccd.chips):
+        new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
+
+        if new_uncertainty is not None:
+            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.array
+
+        if new_mask is not None:
+            new_mask[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.mask
+
+    new_fits_data.append(fits.ImageHDU(data=new_data, header=fits_data[1].header, name='DATA'))
+
+    if new_uncertainty is not None:
+        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=fits_data[1].header, name='UNCERTAINTY'))
+
+    if new_mask is not None:
+        new_mask |= np.isnan(new_data)
+        new_fits_data.append(fits.ImageHDU(data=new_mask.astype(np.uint8), header=fits_data[1].header, name='MASK'))
+
+    new_data[np.isnan(new_data)] = 0.0
+
+    return fits.HDUList(new_fits_data)

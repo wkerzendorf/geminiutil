@@ -5,20 +5,30 @@ detector_type:
   eev : "SDSU II CCD"
   e2vdd : "SDSU II e2v DD CCD42-90"
 
-arcsecpermm : 1.611444 arcsec/mm
+arcsecpermm : 1.611444 #arcsec/mm
 
 pixel_scale:
 
-  #gmos-n:
+  gmos-n:
     eev : 0.0727 #arcsec/pixel
     e2vdd : 0.07288 #arcsec/pixel
     hamamatsu : 0.0727 #arcsec/pixel
 
-  #gmos-s:
-  #  eev : 0.073 #arcsec/pixel
+  gmos-s:
+    eev : 0.073 #arcsec/pixel
 
 spectral_cutoff:
     eev : 1025 #nm
     e2vdd : 1050 #nm
     hamamatsu : 1080 #nm
 
+#chip_placement:
+
+
+chip_gap:
+  unbinned: 37
+  binned: 36
+
+y-distortion:
+  gmos-s: [0.99911, -1.7465e-5, 3.0494e-7]
+  gmos-n: [0.99591859227, 5.3042211333437e-8, 1.7447902551997e-7]

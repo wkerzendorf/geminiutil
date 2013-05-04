@@ -76,6 +76,9 @@ class GMOSDetector(Base):
     x_binning = Column(Integer)
     y_binning = Column(Integer)
     frame_id = Column(Integer)
+    instrument_id = Column(Integer, ForeignKey('instrument.id'))
+
+    instrument = relationship(Instrument)
 
     @classmethod
     def from_fits_object(cls, fits_object, ccd_no):
@@ -87,15 +90,19 @@ class GMOSDetector(Base):
         x_binning, y_binning = map(int, header['CCDSUM'].split())
 
         readout_direction = header['ampname'].split(',')[1].strip()
+
+        instrument_id = Instrument.from_fits_object(fits_object).id
+
         detector_object = session.query(cls).filter(cls.naxis1==header['NAXIS1'], cls.naxis2==header['NAXIS2'],
                                   cls.ccd_name==header['CCDNAME'], cls.readout_direction==readout_direction,
                                   (func.abs(cls.gain - header['GAIN']) / header['GAIN']) < 0.0001,
                                   (func.abs(cls.readout_noise - header['RDNOISE']) / header['RDNOISE']) < 0.0001,
                                   cls.x_binning==x_binning, cls.y_binning==y_binning,
-                                  cls.frame_id==int(header['FRAMEID'])).all()
+                                  cls.frame_id==int(header['FRAMEID']),
+                                  cls.instrument_id==instrument_id).all()
         if detector_object == []:
             detector_object = cls(header['NAXIS1'], header['NAXIS2'], header['CCDNAME'], readout_direction, header['GAIN'],
-                       header['RDNOISE'], x_binning, y_binning, header['FRAMEID'])
+                       header['RDNOISE'], x_binning, y_binning, header['FRAMEID'], instrument_id)
             session.add(detector_object)
             session.commit()
             return detector_object
@@ -104,7 +111,7 @@ class GMOSDetector(Base):
         else:
             raise ValueError('Found more than one detectors')
 
-    def __init__(self, naxis1, naxis2, ccd_name, readout_direction, gain, read_noise, x_binning, y_binning, frame_id):
+    def __init__(self, naxis1, naxis2, ccd_name, readout_direction, gain, read_noise, x_binning, y_binning, frame_id, instrument_id):
         self.naxis1 = naxis1
         self.naxis2 = naxis2
         self.ccd_name = ccd_name
@@ -114,12 +121,13 @@ class GMOSDetector(Base):
         self.x_binning = x_binning
         self.y_binning = y_binning
         self.frame_id = frame_id
+        self.instrument_id = instrument_id
 
 
     @misc.lazyproperty
     def pixel_scale(self):
         if self.ccd_name.startswith('EEV'):
-            return detector_information['pixel_scale']['eev'] * units.Unit('arcsec/pixel')
+            return detector_information['pixel_scale'][self.instrument.name]['eev'] * units.Unit('arcsec/pixel')
         else:
             raise NotImplemented('CCD %s not implemented yet' % self.ccd_name)
 
@@ -200,7 +208,7 @@ class GMOSGrating(Base):
     wavelength_offset_unit = units.Unit('nm')
 
     y_offset_value = Column(Float)
-    y_offset_unit = units.Unit('nm')
+    y_offset_unit = units.Unit('pix')
 
 
     def __getattr__(self, item):
@@ -249,6 +257,8 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating_order = Column(Integer)
 
+    instrument_id = Column(Integer, ForeignKey('instrument.id'))
+
     #instrument_setup2detector_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup2gmosdetector.id'))
 
     filter1 = relationship(GMOSFilter, primaryjoin=(GMOSFilter.id==filter1_id),
@@ -259,7 +269,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating = relationship(GMOSGrating)
 
-
+    instrument = relationship(base.Instrument)
 
 
     @classmethod
@@ -290,10 +300,14 @@ class GMOSMOSInstrumentSetup(Base):
 
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
+
+        instrument_id = base.Instrument.from_fits_object(fits_object).id
+
+
         instrument_setup2detector = []
 
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
-            cls.grating_id==grating_id,
+            cls.grating_id==grating_id, cls.instrument_id==instrument_id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
                                                     / grating_central_wavelength) < 0.0001,
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
@@ -303,7 +317,7 @@ class GMOSMOSInstrumentSetup(Base):
 
         if instrument_setup_object == []:
             instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order)
+                                            grating_order, instrument_id)
             session.add(instrument_setup_object)
             session.commit()
 
@@ -333,13 +347,14 @@ class GMOSMOSInstrumentSetup(Base):
         return detectors
 
     def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
-                 grating_order):
+                 grating_order, instrument_id):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
+        self.instrument_id = instrument_id
 
     def __getattr__(self, item):
         if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
@@ -351,13 +366,15 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def x_binning(self):
-        assert self.detector1.x_binning == self.detector2.x_binning == self.detector3.x_binning
-        return self.detector1.x_binning
+        x_binnings = np.array([detector.x_binning for detector in self.detectors])
+        assert np.all(x_binnings == x_binnings[0])
+        return x_binnings[0]
 
     @misc.lazyproperty
     def y_binning(self):
-        assert self.detector1.y_binning == self.detector2.y_binning == self.detector3.y_binning
-        return self.detector1.y_binning
+        y_binnings = np.array([detector.y_binning for detector in self.detectors])
+        assert np.all(y_binnings == y_binnings[0])
+        return y_binnings[0]
 
     @misc.lazyproperty
     def anamorphic_factor(self):
@@ -386,9 +403,28 @@ class GMOSMOSInstrumentSetup(Base):
     def wavelength_end(self):
         wavelength_end_value = np.min([item.to('nm').value for item in [self.filter1.wavelength_end,
                                                                         self.filter2.wavelength_end,
-                                                                        self.detector3.spectral_cutoff,
+                                                                        self.detectors[-1].spectral_cutoff,
                                                                         self.grating.wavelength_end]])
         return wavelength_end_value * units.Unit('nm')
+
+    @misc.lazyproperty
+    def y_offset(self):
+        return self.grating.y_offset / self.y_binning
+
+    @misc.lazyproperty
+    def y_distortion_coefficients(self):
+        return detector_information['y-distortion'][self.instrument.name]
+
+    @misc.lazyproperty
+    def arcsecpermm(self):
+        return detector_information['arcsecpermm'] * units.Unit('arcsec/mm')
+
+    @misc.lazyproperty
+    def chip_gap(self):
+        if self.x_binning == 1:
+            return detector_information['chip_gap']['unbinned']
+        elif self.x_binning > 1:
+            return np.int(np.round(detector_information['chip_gap']['binned'] / self.x_binning))
 
     def calculate_resolution(self, slit_width):
         """
@@ -404,8 +440,17 @@ class GMOSMOSInstrumentSetup(Base):
                                              np.sin(self.calculated_grating_tilt.to('rad').value))
 
     @misc.lazyproperty
+    def x_scale(self):
+        return self.detectors[1].pixel_scale * self.x_binning
+
+    @misc.lazyproperty
+    def y_scale(self):
+        return self.detectors[1].pixel_scale * self.y_binning
+
+
+    @misc.lazyproperty
     def spectral_pixel_scale(self):
-        xscale = self.x_binning * self.detector1.pixel_scale.to('rad/pix').value
+        xscale = self.x_scale.to('rad/pix').value
         spectral_pixel_scale_value = self.anamorphic_factor * xscale * self.grating_central_wavelength.to('nm').value * \
             81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
         return spectral_pixel_scale_value * units.Unit('nm/pix')
