@@ -162,7 +162,7 @@ class GMOSFilter(Base):
 
     @property
     def full_path(self):
-        return self.path.join(self.path, self.fname)
+        return os.path.join(self.path, self.fname)
 
     @property
     def wavelength_start(self):
@@ -171,6 +171,14 @@ class GMOSFilter(Base):
     @property
     def wavelength_end(self):
         return units.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
+
+    @misc.lazyproperty
+    def wavelength(self):
+        return np.loadtxt(self.full_path, usecols=(0,))
+
+    @misc.lazyproperty
+    def flux(self):
+        return np.loadtxt(self.full_path, usecols=(1,))
 
 
     def __repr__(self):
@@ -492,6 +500,15 @@ class GMOSMOSRawFITS(Base):
 
     instrument_setup = relationship(GMOSMOSInstrumentSetup)
 
+
+    @property
+    def associated_query(self):
+        session = object_session(self)
+        return session.query(GMOSMOSRawFITS).filter_by(observation_block_id=self.observation_block_id)
+
+    @property
+    def associated(self):
+        return self.associated_query.all()
     def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
                  object_id, mask_id=None, instrument_setup_id=None, exclude=False):
         self.date_obs = date_obs
