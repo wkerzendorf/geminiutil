@@ -1,6 +1,7 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
 import logging
 from datetime import datetime
 
@@ -13,24 +14,59 @@ logger = logging.getLogger(__name__)
 default_configuration_dir = os.path.join(os.path.dirname(__file__), 'data')
 
 class GMOSMOSProject(BaseProject):
+    """GMOS multi-object spectroscopy project.
+
+    Example
+    -------
+    Start/restart a project with a given database that holds information
+    about all observations
+
+    >>> import geminiutil.base as base
+    >>> from geminiutil.gmos.gmos_project import GMOSMOSProject
+    >>> proj = GMOSMOSProject('sqlite:///mcsnr.db3')
+
+    First time, initialize to read in GMOS filter/grating information
+
+    >>> proj.initialize()
+
+    Add observations to the database
+
+    >>> proj.add_directory('/raw/mhvk/gemini/mcsnr', file_filter='S*S*.fits')
+
+    Now, can get sets of relevant files.  E.g., 
+
+    >>> print proj.observation_class
+    (u'daycal', u'acq', u'science', u'partnercal', u'acqcal', u'progcal')
+
+    >>> proj.observation_types
+    (u'flat', u'object', u'arc')
+
+    >>> science_list = proj.science
+    >>> daycal_list = proj.daycal
+    """
 
     def __init__(self, database_string, echo=False):
-        super(GMOSMOSProject, self).__init__(database_string, GMOSMOSRawFITS, echo=echo)
+        super(GMOSMOSProject, self).__init__(database_string, 
+                                             GMOSMOSRawFITS, echo=echo)
 
     @property
     def observation_class(self):
+        """Names of observation classes in the database (e.g., 'daycal')."""
         return zip(*self.session.query(base.ObservationClass.name).all())[0]
 
     @property
     def observation_types(self):
+        """Names of observation types in the database (e.g., 'science')."""
         return zip(*self.session.query(base.ObservationType.name).all())[0]
 
 
     def __getattr__(self, item):
         if item in self.observation_types:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationType).filter(ObservationType.name==item).all()
+            return self.session.query(GMOSMOSRawFITS).join(
+                ObservationType).filter(ObservationType.name==item).all()
         elif item in self.observation_class:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).filter(ObservationClass.name==item).all()
+            return self.session.query(GMOSMOSRawFITS).join(
+                ObservationClass).filter(ObservationClass.name==item).all()
         else:
             return self.__getattribute__(item)
 
@@ -42,18 +78,23 @@ class GMOSMOSProject(BaseProject):
             fits_object = self.add_gmos_mask(current_fits)
 
         if fits_object is None:
-            logger.warning('Could not classify fits file %s', current_fits.fname)
+            logger.warning('Could not classify fits file %s', 
+                           current_fits.fname)
         return fits_object
         #self.add_gmos_mask(self)
 
     def add_gmos_raw_fits(self, fits_file):
-        required_categories = [base.Object, base.Program, base.ObservationBlock, base.ObservationClass, base.ObservationType,
-                               base.Instrument]
+        required_categories = [base.Object, base.Program, 
+                               base.ObservationBlock, base.ObservationClass, 
+                               base.ObservationType, base.Instrument]
 
-        required_keywords = [item.category_keyword for item in required_categories] + ['date-obs']
+        required_keywords = [item.category_keyword 
+                             for item in required_categories] + ['date-obs']
 
-        if not all([keyword in fits_file.header for keyword in required_keywords]):
-            logger.debug("%s is not a normal raw gmos fits file", fits_file.fname)
+        if not all([keyword in fits_file.header 
+                    for keyword in required_keywords]):
+            logger.debug("%s is not a normal raw gmos fits file", 
+                         fits_file.fname)
             return
 
         object = base.Object.from_fits_object(fits_file)
@@ -65,21 +106,23 @@ class GMOSMOSProject(BaseProject):
 
 
         if len(fits_file.fits_data) == 4 or len(fits_file.fits_data) ==  7:
-            instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(fits_file).id
+            instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(
+                fits_file).id
         else:
-            logger.warn('Unusual fits data with %d HDUs (expecting either 4 or 7)', len(fits_file.fits_data))
+            logger.warn('Unusual fits data with %d HDUs '
+                        '(expecting either 4 or 7)', len(fits_file.fits_data))
             instrument_setup_id = None
 
-
-
-        date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
+        date_obs_str = '%sT%s' % (fits_file.header['date-obs'], 
+                                  fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        gmos_raw = self.raw_fits_class(date_obs=date_obs, instrument_id=instrument.id,
-                                       observation_block_id=observation_block.id,
-                                       observation_class_id=observation_class.id,
-                                       observation_type_id=observation_type.id, object_id=object.id,
-                                       instrument_setup_id=instrument_setup_id)
+        gmos_raw = self.raw_fits_class(
+            date_obs=date_obs, instrument_id=instrument.id,
+            observation_block_id=observation_block.id,
+            observation_class_id=observation_class.id,
+            observation_type_id=observation_type.id, object_id=object.id,
+            instrument_setup_id=instrument_setup_id)
 
         gmos_raw.id = fits_file.id
 
@@ -89,14 +132,13 @@ class GMOSMOSProject(BaseProject):
         return gmos_raw
 
 
-
-
     def add_gmos_mask(self, fits_object):
         required_keywords = ['GEMPRGID', 'OBSTYPE', 'ODFNAME']
-        if not all([keyword in fits_object.header for keyword in required_keywords]) and \
-                        fits_object.header['OBSTYPE'].lower().strip() != 'mask':
-
-            logger.debug("%s is not a normal gemini mask file" % fits_object.fname)
+        if not all([keyword in fits_object.header 
+                    for keyword in required_keywords]) and \
+                    fits_object.header['OBSTYPE'].lower().strip() != 'mask':
+            logger.debug("%s is not a normal gemini mask file" % 
+                         fits_object.fname)
             return None
 
         gmos_mask = GMOSMask.from_fits_object(fits_object)
@@ -107,70 +149,92 @@ class GMOSMOSProject(BaseProject):
         return gmos_mask
 
     def link_masks(self):
+        """For each MOS observation, link it to the corresponding mask file."""
         for gmos_raw in self.session.query(GMOSMOSRawFITS):
             if gmos_raw.mask_id is not None:
-                logger.debug('Mask is already set for %s - moving on', gmos_raw.fits.fname)
+                logger.debug('Mask is already set for %s - moving on', 
+                             gmos_raw.fits.fname)
                 continue
             mask_name = gmos_raw.fits.header['maskname']
             if re.match('G[SN]\d{4}.+', mask_name) is None:
-                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname', mask_name, gmos_raw.fits.fname)
+                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname', 
+                            mask_name, gmos_raw.fits.fname)
                 continue
-            masks_found = self.session.query(GMOSMask).filter_by(name=mask_name.strip().lower()).count()
+            masks_found = self.session.query(GMOSMask).filter_by(
+                name=mask_name.strip().lower()).count()
             if masks_found == 0:
-                logger.critical('Mask %s is required by %s but does not exist in database', mask_name, gmos_raw.fits.fname)
+                logger.critical('Mask %s is required by %s but does not exist'
+                                'in database', mask_name, gmos_raw.fits.fname)
                 continue
             elif masks_found > 1:
-                logger.warn('Mask %s is duplicate in the database - please check', mask_name)
+                logger.warn('Mask %s is duplicate in the database - '
+                            ' please check', mask_name)
                 continue
             else:
-                logger.info('Linking %s with mask %s', gmos_raw.fits.fname, mask_name)
-                mask = self.session.query(GMOSMask).filter_by(name=mask_name.strip().lower()).one()
+                logger.info('Linking %s with mask %s', 
+                            gmos_raw.fits.fname, mask_name)
+                mask = self.session.query(GMOSMask).filter_by(
+                    name=mask_name.strip().lower()).one()
                 gmos_raw.mask_id = mask.id
 
         self.session.commit()
 
 
     def initialize_database(self, configuration_dir=None):
+        """Read in GMOS filter/grating information, for matching to headers."""
         if configuration_dir is None:
             configuration_dir = default_configuration_dir
 
         logger.info('Reading Filter information')
 
-        gmos_filters = np.recfromtxt(os.path.join(configuration_dir, 'GMOSfilters.dat'),
-                                     names=['name', 'wave_start', 'wave_end', 'fname'])
+        gmos_filters = np.recfromtxt(
+            os.path.join(configuration_dir, 'GMOSfilters.dat'),
+            names=['name', 'wave_start', 'wave_end', 'fname'])
         for line in gmos_filters:
-            new_filter = GMOSFilter(name=line['name'], wavelength_start_value=line['wave_start'],
-                                    wavelength_start_unit='nm', wavelength_end_value=line['wave_end'],
-                                    wavelength_end_unit='nm', fname=line['fname'],
-                                    path=os.path.join(configuration_dir, 'filter_data'))
+            new_filter = GMOSFilter(name=line['name'], 
+                                    wavelength_start_value=line['wave_start'],
+                                    wavelength_start_unit='nm', 
+                                    wavelength_end_value=line['wave_end'],
+                                    wavelength_end_unit='nm', 
+                                    fname=line['fname'],
+                                    path=os.path.join(configuration_dir, 
+                                                      'filter_data'))
             self.session.add(new_filter)
 
         open_filter = GMOSFilter(name='open', wavelength_start_value=0,
-                                    wavelength_start_unit='nm', wavelength_end_value=np.inf,
-                                    wavelength_end_unit='nm', fname=None,
-                                    path=None)
+                                 wavelength_start_unit='nm', 
+                                 wavelength_end_value=np.inf,
+                                 wavelength_end_unit='nm', 
+                                 fname=None, path=None)
         self.session.add(open_filter)
 
-        gmos_gratings = np.recfromtxt(os.path.join(configuration_dir, 'GMOSgratings.dat'),
-                                      names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
-                                               'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
+        gmos_gratings = np.recfromtxt(
+            os.path.join(configuration_dir, 'GMOSgratings.dat'),
+            names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
+                     'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
         logger.info('Reading grating information')
         for line in gmos_gratings:
-            new_grating = GMOSGrating(name=line['name'], ruling_density_value=line['ruling_density'],
-                                       blaze_wavelength_value=line['blaze_wave'], R=line['R'],
-                                       coverage_value=line['coverage'], wavelength_start_value=line['wave_start'],
-                                       wavelength_end_value=line['wave_end'],
-                                       wavelength_offset_value=line['wave_offset'], y_offset_value=line['y_offset'])
+            new_grating = GMOSGrating(
+                name=line['name'], 
+                ruling_density_value=line['ruling_density'],
+                blaze_wavelength_value=line['blaze_wave'], 
+                R=line['R'],
+                coverage_value=line['coverage'], 
+                wavelength_start_value=line['wave_start'],
+                wavelength_end_value=line['wave_end'],
+                wavelength_offset_value=line['wave_offset'], 
+                y_offset_value=line['y_offset'])
             self.session.add(new_grating)
 
-        mirror = GMOSGrating(name='mirror', ruling_density_value=0.0,
-                                       blaze_wavelength_value=0.0, R=0.0,
-                                       coverage_value=np.inf, wavelength_start_value=0.0,
-                                       wavelength_end_value=np.inf,
-                                       wavelength_offset_value=0.0, y_offset_value=0.0)
+        mirror = GMOSGrating(name='mirror', 
+                             ruling_density_value=0.0,
+                             blaze_wavelength_value=0.0, R=0.0,
+                             coverage_value=np.inf, 
+                             wavelength_start_value=0.0,
+                             wavelength_end_value=np.inf,
+                             wavelength_offset_value=0.0, 
+                             y_offset_value=0.0)
         self.session.add(mirror)
-
-
         self.session.commit()
 
 
