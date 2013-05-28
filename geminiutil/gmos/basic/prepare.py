@@ -350,7 +350,7 @@ def header_value(chip, key):
     1-dimensional array of header content (1 element) or left+right array
     """
     if key in chip.header:
-        return np.array([chip.header])
+        return np.array([chip.header[key]])
 
     values = leftright_header(chip, key)
     slices = [sec2slice(datasec) for datasec in 
