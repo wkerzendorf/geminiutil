@@ -349,7 +349,7 @@ def header_value(chip, key):
     -------
     1-dimensional array of header content (1 element) or left+right array
     """
-    if chip.header.has_key(key):
+    if key in chip.header:
         return np.array([chip.header[key]])
 
     values = leftright_header(chip, key)
@@ -372,3 +372,15 @@ def multiext_data(im):
 def multiext_header_value(im, key):
     """Return headers from multiple extensions as 3-dimensional array."""
     return np.array([header_value(ext, key)[np.newaxis,:] for ext in im[1:]])
+
+def x_coords(chip, key='CCDSEC'):
+    assert key in ['CCDSEC', 'DETSEC']
+    slice_x = sec2slice(chip.header[key])[1]
+    step = np.fromstring(chip.header['CCDSUM'], sep=' ', dtype=np.int)[1]
+    return np.arange(slice_x.start-0.5+step/2., slice_x.stop-0.5+step/2., step)
+
+def multiext_x_coords(im, key='CCDSEC'):
+    out = np.array([x_coords(ext, key)[np.newaxis,:] for ext in im[1:]])
+    if all(np.all(out[0]==t) for t in out[1:]):
+        out = out[0].reshape(1, 1, -1)
+    return out
