@@ -112,7 +112,7 @@ class GMOSPrepare(object): # will be base when we know what
         #MOSAICING DATA
         #####
         final_hdu_list = fits.HDUList(final_hdu_list)
-        final_hdu_list = prepare.mosaic(final_hdu_list, chip_gap=gmos_raw_object.instrument_setup.chip_gap)
+        final_hdu_list = mosaic(final_hdu_list, chip_gap=gmos_raw_object.instrument_setup.chip_gap)
         if write_steps:
             mosaic_fname = 'mosaic-%s' % gmos_raw_object.fits.fname
             final_hdu_list.writeto(os.path.join(destination_dir, mosaic_fname), clobber=True)
@@ -247,7 +247,7 @@ def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
     if max_data is not None:
         mask_data |= amplifier.data > max_data
 
-    mask_data = mask_data.astype(dtype=np.uint8)
+    mask_data = mask_data.astype(np.uint8)
 
     return fits.ImageHDU(mask_data, header=amplifier.header)
 
