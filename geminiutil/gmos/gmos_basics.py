@@ -1,12 +1,9 @@
 from .. base import Base, FITSFile
 import astropy.io.fits as fits
-from astropy.nddata import NDData, StdDevUncertainty
-import numpy as np
-from numpy.polynomial.polynomial import polyfit as polyfit
 import logging
 import os
-from collections import OrderedDict
-
+from geminiutil.gmos.gmos_alchemy import GMOSMOSPrepared
+from sqlalchemy.orm import object_session
 from .basic import prepare, mask_cut
 
 logger = logging.getLogger(__name__)
@@ -91,7 +88,14 @@ class GMOSPrepare(object): # will be base when we know what
             final_hdu_list += [amplifier_data]
 
             fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
-        return FITSFile.from_fits_file(full_path)
+        fits_file = FITSFile.from_fits_file(full_path)
+        session = object_session(gmos_raw_object)
+        session.add(fits_file)
+        session.commit()
+        gmos_mos_prepared = GMOSMOSPrepared(id=fits_file.id, raw_fits_id=gmos_raw_object.id)
+        session.add(gmos_mos_prepared)
+        session.commit()
+        return gmos_mos_prepared
 
 
 class GMOSMOSCutSlits(object):
@@ -102,46 +106,29 @@ class GMOSMOSCutSlits(object):
         def __init__(self, mode='header_cut'):
             pass
 
-        def __call__(self, gmos_raw_object, fname=None, destination_dir='.', write_steps=False, write_cut_image=None):
+        def __call__(self, gmos_prepared_object, fname=None, destination_dir='.', write_steps=False, write_cut_image=None):
             """
-            Preparing the Image
-
-            Parameters
-            ----------
-
-            gmos_raw_object :
-
-            fname :
-                output filename
-
-            write_steps :
-                write out the individual steps to the individual fits files
-
-            write_cut_image :
-                write out the cut_image to a fits file with name specified in variable
-
-
-
             """
 
             if fname is None:
-                fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
+                fname = '%s-%s' % (self.file_prefix, gmos_prepared_object.fits.fname)
 
             full_path = os.path.join(destination_dir, fname)
 
-            fits_data = gmos_raw_object.fits.fits_data
+            fits_data = gmos_prepared_object.fits.fits_data
 
             final_hdu_list = [fits_data[0].copy()]
+            chip_data = [fits_data[i].data for i in range(1, 4)]
 
 
             #####
             #Cutting the Mask
             #####
-            mdf_table = gmos_raw_object.mask.fits.fits_data['MDF'].data
-            naxis1 = final_hdu_list['DATA'].header['naxis1']
-            naxis2 = final_hdu_list['DATA'].header['naxis2']
+            mdf_table = gmos_prepared_object.raw_fits.mask.fits.fits_data['MDF'].data
+            naxis1 = fits_data[1].header['naxis1'] * 3
+            naxis2 = fits_data[1].header['naxis2']
 
-            current_instrument_setup = gmos_raw_object.instrument_setup
+            current_instrument_setup = gmos_prepared_object.raw_fits.instrument_setup
             x_scale = current_instrument_setup.x_scale
             y_scale = current_instrument_setup.y_scale
 
@@ -161,23 +148,14 @@ class GMOSMOSCutSlits(object):
                                                             arcsecpermm = arcsecpermm, y_offset=y_offset)
 
 
-            return prepared_mdf_table
 
-            if write_cut_image:
-                cut_image, cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
-                                                uncertainty=final_hdu_list['UNCERTAINTY'].data,
-                                                mask=final_hdu_list['MASK'].data, return_cut_image=True)
 
-                fits.ImageHDU(data=cut_image).writeto(os.path.join(destination_dir, write_cut_image), clobber=True)
-            else:
-                cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
-                                                uncertainty=final_hdu_list['UNCERTAINTY'].data,
-                                                mask=final_hdu_list['MASK'].data)
+            cut_hdu_list = mask_cut.cut_slits(chip_data, prepared_mdf_table)
 
 
 
+            cut_hdu_list.insert(0, fits_data[0].copy())
 
-            cut_hdu_list.insert(0, final_hdu_list[0])
             fits.HDUList(cut_hdu_list).writeto(full_path, clobber=True)
             return FITSFile.from_fits_file(full_path)
 
