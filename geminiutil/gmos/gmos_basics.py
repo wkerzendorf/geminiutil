@@ -1,12 +1,9 @@
 from .. base import Base, FITSFile
 import astropy.io.fits as fits
-from astropy.nddata import NDData, StdDevUncertainty
-import numpy as np
-from numpy.polynomial.polynomial import polyfit as polyfit
 import logging
 import os
-from collections import OrderedDict
-
+from geminiutil.gmos.gmos_alchemy import GMOSMOSPrepared
+from sqlalchemy.orm import object_session
 from .basic import prepare, mask_cut
 
 logger = logging.getLogger(__name__)
@@ -65,6 +62,9 @@ class GMOSPrepare(object): # will be base when we know what
 
         final_hdu_list = [fits_data[0].copy()]
 
+        #make sure we only have data for 3 fits files. This does not yet work for GMOS-N
+        assert len(fits_data) - 1 == 3
+
         for i in xrange(1, len(fits_data)):
             current_amplifier = fits_data[i]
             detector = gmos_raw_object.instrument_setup.detectors[i - 1]
@@ -83,252 +83,79 @@ class GMOSPrepare(object): # will be base when we know what
             #####
 
             amplifier_data = prepare.correct_gain(amplifier_data, gain=detector.gain)
-            amplifier_data.name = 'DATA_%d' % i
-            bias_uncertainty = amplifier_data.header['BIASSTD']
+            amplifier_data.name = 'chip%d.data' % i
+
+            final_hdu_list += [amplifier_data]
+
+            fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
+        fits_file = FITSFile.from_fits_file(full_path)
+        session = object_session(gmos_raw_object)
+        session.add(fits_file)
+        session.commit()
+        gmos_mos_prepared = GMOSMOSPrepared(id=fits_file.id, raw_fits_id=gmos_raw_object.id)
+        session.add(gmos_mos_prepared)
+        session.commit()
+        return gmos_mos_prepared
+
+
+class GMOSMOSCutSlits(object):
+        __tablename__ = 'gmosmos_cut_slits'
+
+        file_prefix = 'cut'
+
+        def __init__(self, mode='header_cut'):
+            pass
+
+        def __call__(self, gmos_prepared_object, fname=None, destination_dir='.', write_steps=False, write_cut_image=None):
+            """
+            """
+
+            if fname is None:
+                fname = '%s-%s' % (self.file_prefix, gmos_prepared_object.fits.fname)
+
+            full_path = os.path.join(destination_dir, fname)
+
+            fits_data = gmos_prepared_object.fits.fits_data
+
+            final_hdu_list = [fits_data[0].copy()]
+            chip_data = [fits_data[i].data for i in range(1, 4)]
 
 
             #####
-            #Create uncertainty Frame
-            ####
-            # ***TODO*** bias uncertainty should not be here, since this is correlated
-            # for all pixels.  What is important later is a flat field/sensitivity error.
+            #Cutting the Mask
+            #####
+            mdf_table = gmos_prepared_object.raw_fits.mask.fits.fits_data['MDF'].data
+            naxis1 = fits_data[1].header['naxis1'] * 3
+            naxis2 = fits_data[1].header['naxis2']
 
-            amplifier_uncertainty = create_uncertainty_frame(amplifier_data, readout_noise=detector.readout_noise,
-                                                             bias_uncertainty=bias_uncertainty)
+            current_instrument_setup = gmos_prepared_object.raw_fits.instrument_setup
+            x_scale = current_instrument_setup.x_scale
+            y_scale = current_instrument_setup.y_scale
 
-            amplifier_uncertainty.name = 'UNCERTAINTY_%d' % i
-
-            ####
-            #CREATE MASK FRAME
-            ####
-
-            # TODO add BPM from gmos_data
-
-            amplifier_mask = create_mask(amplifier_data)
-            amplifier_mask.name = 'MASK_%d' %i
-
-            final_hdu_list += [amplifier_data, amplifier_uncertainty, amplifier_mask]
-        ######
-        #MOSAICING DATA
-        #####
-        final_hdu_list = fits.HDUList(final_hdu_list)
-        final_hdu_list = mosaic(final_hdu_list, chip_gap=gmos_raw_object.instrument_setup.chip_gap)
-        if write_steps:
-            mosaic_fname = 'mosaic-%s' % gmos_raw_object.fits.fname
-            final_hdu_list.writeto(os.path.join(destination_dir, mosaic_fname), clobber=True)
-        #####
-        #Cutting the Mask
-        #####
-        mdf_table = gmos_raw_object.mask.fits.fits_data['MDF'].data
-        naxis1 = final_hdu_list['DATA'].header['naxis1']
-        naxis2 = final_hdu_list['DATA'].header['naxis2']
-
-        current_instrument_setup = gmos_raw_object.instrument_setup
-        x_scale = current_instrument_setup.x_scale
-        y_scale = current_instrument_setup.y_scale
-
-        wavelength_offset = current_instrument_setup.grating.wavelength_offset
-        spectral_pixel_scale = current_instrument_setup.spectral_pixel_scale
-        wavelength_start = current_instrument_setup.wavelength_start
-        wavelength_end = current_instrument_setup.wavelength_end
-        wavelength_central = current_instrument_setup.grating_central_wavelength
-        y_distortion_coefficients = current_instrument_setup.y_distortion_coefficients
-        y_offset = current_instrument_setup.y_offset
-        anamorphic_factor = current_instrument_setup.anamorphic_factor
-        arcsecpermm = current_instrument_setup.arcsecpermm
-        prepared_mdf_table = mask_cut.prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor,
-                                                        wavelength_offset, spectral_pixel_scale, wavelength_start,
-                                                        wavelength_central, wavelength_end,
-                                                        y_distortion_coefficients=y_distortion_coefficients,
-                                                        arcsecpermm = arcsecpermm, y_offset=y_offset)
-
-        if write_cut_image:
-            cut_image, cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
-                                            uncertainty=final_hdu_list['UNCERTAINTY'].data,
-                                            mask=final_hdu_list['MASK'].data, return_cut_image=True)
-
-            fits.ImageHDU(data=cut_image).writeto(os.path.join(destination_dir, write_cut_image), clobber=True)
-        else:
-            cut_hdu_list = mask_cut.cut_slits(final_hdu_list['DATA'].data, prepared_mdf_table,
-                                            uncertainty=final_hdu_list['UNCERTAINTY'].data,
-                                            mask=final_hdu_list['MASK'].data)
+            wavelength_offset = current_instrument_setup.grating.wavelength_offset
+            spectral_pixel_scale = current_instrument_setup.spectral_pixel_scale
+            wavelength_start = current_instrument_setup.wavelength_start
+            wavelength_end = current_instrument_setup.wavelength_end
+            wavelength_central = current_instrument_setup.grating_central_wavelength
+            y_distortion_coefficients = current_instrument_setup.y_distortion_coefficients
+            y_offset = current_instrument_setup.y_offset
+            anamorphic_factor = current_instrument_setup.anamorphic_factor
+            arcsecpermm = current_instrument_setup.arcsecpermm
+            prepared_mdf_table = mask_cut.prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor,
+                                                            wavelength_offset, spectral_pixel_scale, wavelength_start,
+                                                            wavelength_central, wavelength_end,
+                                                            y_distortion_coefficients=y_distortion_coefficients,
+                                                            arcsecpermm = arcsecpermm, y_offset=y_offset)
 
 
 
 
-        cut_hdu_list.insert(0, final_hdu_list[0])
-        fits.HDUList(cut_hdu_list).writeto(full_path, clobber=True)
-        return FITSFile.from_fits_file(full_path)
-
-class Prepare(object):
-    def __init__(self, bias_subslice=[slice(None), slice(1,11)], 
-                 data_subslice=[slice(None), slice(-1)], clip=3.,
-                 gain=None, read_noise=None, combine=True, 
-                 overscan_std_threshold=3.):
-        """Class that extracts and combines bias- and gain-corrected extensions.
-
-        Wrapper around function ~basic.prepare.prepare
-
-        Returns
-        -------
-        Class instance which can be applied to input fits files, using call
-        method (which calls functions correct_overscan, correct_gain, and
-        combine_halves with parameters set here)
-
-        Examples
-        --------
-        PrepDA = gmos_basics.Prepare(data_subslice=[slice(72,172),slice(-1)])
-        dayarc = PrepDA(fits.open('N20120423S0019.fits'))
-        """
-        self.bias_subslice = bias_subslice
-        self.data_subslice = data_subslice
-        self.clip = clip
-        self.gain = gain
-        self.read_noise = read_noise
-        self.combine = combine
-        self.overscan_std_threshold = overscan_std_threshold
-
-    def __call__(self, image):
-        """Measure bias from overscan, correct for gain, combine halves.
-
-        Notes
-        -----
-        calls ~basic.prepare.prepare
-        """
-        return prepare.prepare(image, self.bias_subslice, 
-                               self.data_subslice, self.clip, self.gain,
-                               self.read_noise, self.combine,
-                               self.overscan_std_threshold)
-
-def create_uncertainty_frame(amplifier, readout_noise=None, 
-                             bias_uncertainty=None):
-    """
-    Create an standard deviation uncertainty frame for GMOS
-
-    Parameters
-    ----------
-
-    amplifier: ~astropy.io.fits.ImageHDU
-
-    readout_noise: ~float
-        e-; default (~None), from header['RDNOISE']
-    bias_uncertainty: ~float
-        e-; default (~None), use header['BIASUNC']*header['GAINUSED']
-
-    ***TODO*** bias uncertainty should not be here, since this is correlated 
-    for all pixels.  What is important later is a flat field/sensitivity error.
-    """
-
-    if readout_noise is None:
-        readout_noise = amplifier.header['RDNOISE']
-
-    if bias_uncertainty is None:
-        bias_uncertainty = (amplifier.header['BIASUNC'] * 
-                            amplifier.header['GAINUSED'])
-
-    uncertainty_data = np.sqrt(np.abs(amplifier.data) + 
-                               readout_noise**2 + bias_uncertainty**2)
-    uncertainty = fits.ImageHDU(uncertainty_data, amplifier.header)
-    uncertainty.header['uncertainty_type'] = 'stddev'
-
-    return uncertainty
-
-def create_mask(amplifier, min_data=0, max_data=None, template_mask=None):
-    if template_mask is None:
-        mask_data = np.zeros_like(amplifier.data, dtype=bool)
-    else:
-        mask_data = template_mask
-
-    #Make this more complex - like loading initial bpm from somewhere else
-
-    if min_data is not None:
-        mask_data |= amplifier.data < min_data
-
-    if max_data is not None:
-        mask_data |= amplifier.data > max_data
-
-    mask_data = mask_data.astype(np.uint8)
-
-    return fits.ImageHDU(mask_data, header=amplifier.header)
-
-def gmos_ccd_image_arithmetic(func, *args):
-    pass
-
-class GMOSCCDImage(object):
-
-    @classmethod
-    def from_fits_data(cls, fits_data):
-        #searching for independent datasets:
-        chips = []
-        meta = OrderedDict(fits_data[0].header.copy())
-        for chip_id in xrange(1, 4):
-            data = fits_data['data_%d' % chip_id].data
-
-            if fits_data['uncertainty_%d' % chip_id].header['uncertainty_type'] == 'stddev':
-                uncertainty = StdDevUncertainty(fits_data['uncertainty_%d' % chip_id].data)
-
-            mask = fits_data['mask_%d' % chip_id].data.astype(bool)
-
-            chips.append(NDData(data, uncertainty=uncertainty, mask=mask))
-
-        return cls(chips, meta)
+            cut_hdu_list = mask_cut.cut_slits(chip_data, prepared_mdf_table)
 
 
-    def __init__(self, chips, meta):
-        self.chips = chips
-        self.meta = meta
 
-        for chip in self.chips:
-            chip.meta = meta
+            cut_hdu_list.insert(0, fits_data[0].copy())
 
+            fits.HDUList(cut_hdu_list).writeto(full_path, clobber=True)
+            return FITSFile.from_fits_file(full_path)
 
-    def __add__(self, other):
-        if not isinstance(other, GMOSCCDImage):
-            raise TypeError
-
-def mosaic(fits_data, chip_gap):
-    logging.warning('Mosaicing not complete - data remains unshifted - to be implemented')
-    gmos_ccd = GMOSCCDImage.from_fits_data(fits_data)
-    number_of_ccds = len(gmos_ccd.chips)
-    data_xs = [item.data.shape[1] for item in gmos_ccd.chips]
-    new_data_x = np.sum(data_xs) + chip_gap * (number_of_ccds - 1)
-    new_data_y = gmos_ccd.chips[0].data.shape[0]
-    new_data_shape = (new_data_y, new_data_x)
-
-
-    data_starts = np.hstack(([0], np.cumsum(data_xs)))[:-1]
-    data_starts += np.arange(number_of_ccds) * chip_gap
-    new_data = np.zeros(new_data_shape) * np.nan
-
-    if gmos_ccd.chips[0].uncertainty is not None:
-        new_uncertainty = np.zeros(new_data_shape)
-    else:
-        new_uncertainty = None
-
-    if gmos_ccd.chips[0].mask is not None:
-        new_mask = np.zeros(new_data_shape).astype(bool)
-    else:
-        new_mask = None
-    new_fits_data = [fits_data[0]]
-
-    for i, amplifier in enumerate(gmos_ccd.chips):
-        new_data[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.data
-
-        if new_uncertainty is not None:
-            new_uncertainty[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.uncertainty.array
-
-        if new_mask is not None:
-            new_mask[:, data_starts[i]:data_starts[i]+amplifier.data.shape[1]] = amplifier.mask
-
-    new_fits_data.append(fits.ImageHDU(data=new_data, header=fits_data[1].header, name='DATA'))
-
-    if new_uncertainty is not None:
-        new_fits_data.append(fits.ImageHDU(data=new_uncertainty, header=fits_data[1].header, name='UNCERTAINTY'))
-
-    if new_mask is not None:
-        new_mask |= np.isnan(new_data)
-        new_fits_data.append(fits.ImageHDU(data=new_mask.astype(np.uint8), header=fits_data[1].header, name='MASK'))
-
-    new_data[np.isnan(new_data)] = 0.0
-
-    return fits.HDUList(new_fits_data)

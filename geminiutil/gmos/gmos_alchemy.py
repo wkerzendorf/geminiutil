@@ -524,3 +524,17 @@ class GMOSMOSRawFITS(Base):
     def __repr__(self):
         return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
                                                                   self.observation_type.name, self.object.name)
+
+
+class GMOSMOSPrepared(Base):
+    __tablename__ = 'gmos_mos_prepared'
+
+    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
+    raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+
+    raw_fits = relationship(GMOSMOSRawFITS, backref='prepared_fits')
+    fits = relationship(FITSFile, uselist=False)
+    #prepare_param_id = Column(Integer)
+
+
+

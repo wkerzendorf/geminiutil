@@ -62,7 +62,7 @@ def find_mask_edges(flat_image, use_image_columns=slice(None), gauss_filter_sigm
     return peaks, troughs, lower_edges, upper_edges
 
 
-def cut_slits(data, mdf_table, uncertainty=None, mask=None, return_cut_image=False):
+def cut_slits(chip_data, mdf_table):
 
     #check if the table has been prepared
     if 'SECX1' not in mdf_table.colnames:
@@ -70,29 +70,15 @@ def cut_slits(data, mdf_table, uncertainty=None, mask=None, return_cut_image=Fal
 
     final_hdu_list = fits.HDUList()
 
-    if return_cut_image:
-        cut_image = data.copy()
+    for chip_id, data in enumerate(chip_data):
+        for i, (sec_y1, sec_y2) in enumerate(mdf_table['SECY1', 'SECY2']):
+            current_slice = slice(sec_y1, sec_y2)
+            data_slice = data[current_slice].copy()
 
-    for i, (sec_x1, sec_x2, sec_y1, sec_y2) in enumerate(mdf_table['SECX1', 'SECX2', 'SECY1', 'SECY2']):
-        current_slice = (slice(sec_y1, sec_y2), slice(sec_x1,sec_x2))
-        data_slice = data[current_slice].copy()
 
-        if return_cut_image:
-            cut_image[current_slice] = - 1000
+            final_hdu_list.append(fits.ImageHDU(data_slice, name='slice%d.chip%d.data' % (i, chip_id+1)))
 
-        final_hdu_list.append(fits.ImageHDU(data_slice, name='DATA_%d' % i))
-
-        if uncertainty is not None:
-            uncertainty_slice = uncertainty[current_slice]
-            final_hdu_list.append(fits.ImageHDU(uncertainty_slice, name='UNCERTAINTY_%d' % i))
-
-        if mask is not None:
-            mask_slice = mask[current_slice]
-            final_hdu_list.append(fits.ImageHDU(mask_slice, name='MASK_%d' % i))
-    if return_cut_image:
-        return cut_image, final_hdu_list
-    else:
-        return final_hdu_list
+    return final_hdu_list
 
 
 def prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor, wavelength_offset, spectral_pixel_scale,
