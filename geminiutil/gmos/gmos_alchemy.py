@@ -424,8 +424,18 @@ class GMOSMOSInstrumentSetup(Base):
         return detector_information['y-distortion'][self.instrument.name]
 
     @misc.lazyproperty
-    def arcsecpermm(self):
+    def arcsec_per_mm(self):
         return detector_information['arcsecpermm'] * units.Unit('arcsec/mm')
+
+    @misc.lazyproperty
+    def x_pix_per_mm(self):
+        return self.arcsec_per_mm / self.x_scale
+
+    @misc.lazyproperty
+    def y_pix_per_mm(self):
+        return self.arcsec_per_mm / self.y_scale
+
+
 
     @misc.lazyproperty
     def chip_gap(self):
