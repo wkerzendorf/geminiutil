@@ -81,10 +81,13 @@ def cut_slits(chip_data, mdf_table):
     return final_hdu_list
 
 
-def prepare_mdf_table2(mdf_table, instrument_setup, prepared_fits):
+def prepare_mdf_table2(mdf_table, instrument_setup, prepared_fits, slice_fitting_data, shift_bounds=[-20, 20], shift_samples=100):
+
+
+
     mdf_table = table.Table(mdf_table)
 
-    #in relation to center
+    #calculating the slitsize and slit position from the MDF and instrument information
     naxis1, naxis2 = prepared_fits.fits.fits_data[1].header['naxis1'] * units.pix, \
                      prepared_fits.fits.fits_data[1].header['naxis2'] * units.pix
 
@@ -101,11 +104,30 @@ def prepare_mdf_table2(mdf_table, instrument_setup, prepared_fits):
     slit_size_y = mdf_table['slitsize_my'] * units.mm * instrument_setup.y_pix_per_mm
 
 
-    slit_lower_edge = (slit_pos_y  - slit_size_y/2 + instrument_setup.y_offset).value
-    slit_upper_edge = slit_lower_edge + slit_size_y
-    1/0
+    slice_lower_edge = (slit_pos_y  - slit_size_y/2 + instrument_setup.y_offset).value
+    slice_upper_edge = slice_lower_edge + slit_size_y.value
 
-    return slit_lower_edge
+    slices1d = np.median(prepared_fits.fits.fits_data[use_chip_for_fit].data, axis=1)
+    slice_model = np.zeros_like(slices1d)
+
+    for slice_lower, slice_upper in zip(slice_lower_edge, slice_upper_edge):
+        lower_idx = np.int(np.round(slice_lower))
+        upper_idx = np.int(np.round(slice_upper))
+        slice_model[lower_idx:upper_idx] = 1.0
+
+    slice_model *= np.median(slices1d)
+
+    rms_space = []
+    pixel_shifts = np.linspace(shift_bounds[0], shift_bounds[1], shift_samples)
+    for shift in pixel_shifts:
+        rms_space.append(((ndimage.shift(slice_model, shift) - slices1d)**2).sum())
+
+    return pixel_shifts, np.array(rms_space)
+
+
+    #table.Table(dict(slice_lower_edge=slice_lower_edge, slice_upper_edge=slice_upper_edge))
+
+
 
 
 
