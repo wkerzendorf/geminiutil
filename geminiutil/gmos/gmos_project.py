@@ -61,6 +61,9 @@ class GMOSMOSProject(BaseProject):
         """Names of observation types in the database (e.g., 'science')."""
         return zip(*self.session.query(base.ObservationType.name).all())[0]
 
+    @property
+    def science_frames(self):
+        return zip(*self.session.query(GMOSMOSScience).all())
 
     def __getattr__(self, item):
         if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
@@ -140,6 +143,7 @@ class GMOSMOSProject(BaseProject):
         return gmos_raw
 
 
+
     def add_gmos_mask(self, fits_object):
         required_keywords = ['GEMPRGID', 'OBSTYPE', 'ODFNAME']
         if not all([keyword in fits_object.header 
@@ -199,21 +203,14 @@ class GMOSMOSProject(BaseProject):
 
             assert flat.observation_block_id == science_frame.observation_block_id
 
-            day_arc = self.session.query(GMOSMOSRawFITS)\
-                .join(ObservationType).join(ObservationClass)\
-                .filter(ObservationType.name=='arc', ObservationClass.name=='daycal',
-                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
-                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
-
-
-
-            night_arc = self.session.query(GMOSMOSRawFITS)\
+            mask_arc = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).join(ObservationClass)\
                 .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
                         GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
                 .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
 
-            1/0
+            self.session.add(GMOSMOSScience(flat_id=flat.id, mask_arc_id=mask_arc.id))
+        self.session.commit()
 
 
 

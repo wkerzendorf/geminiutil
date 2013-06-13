@@ -558,12 +558,14 @@ class GMOSMOSScience(Base):
 
     id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
     flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
-    day_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
-    night_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
-    flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id))
-    day_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id))
-    night_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==night_arc_id))
+
+    flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
+                        backref=backref('flat2science', uselist=False))
+    mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
+                            backref=backref('mask2science', uselist=False))
+
 
 
 
