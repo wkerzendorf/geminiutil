@@ -1,8 +1,9 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScience
 import logging
+from sqlalchemy import func
 
 from astropy import time
 
@@ -188,10 +189,32 @@ class GMOSMOSProject(BaseProject):
 
     def link_science_frames(self):
 
-        science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationType).\
-            filter(ObservationClass.name=='science', ObservationType.name=='object').all()
+        science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
+            .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
         for science_frame in science_frames:
-            print science_frame
+            flat = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).filter(ObservationType.name=='flat',
+                                              GMOSMOSRawFITS.mask_id==science_frame.mask_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+            assert flat.observation_block_id == science_frame.observation_block_id
+
+            day_arc = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).join(ObservationClass)\
+                .filter(ObservationType.name=='arc', ObservationClass.name=='daycal',
+                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+
+
+            night_arc = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).join(ObservationClass)\
+                .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
+                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+            1/0
+
 
 
     def initialize_database(self, configuration_dir=None):

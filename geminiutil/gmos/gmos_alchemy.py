@@ -321,10 +321,11 @@ class GMOSMOSInstrumentSetup(Base):
                                                     / grating_slit_wavelength) < 0.0001,
             (func.abs(cls.grating_tilt_value - grating_tilt)
                                                     / grating_tilt) < 0.0001).all()
-
+        1/0
         if instrument_setup_object == []:
             instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
                                             grating_order, instrument_id)
+
             session.add(instrument_setup_object)
             session.commit()
 
