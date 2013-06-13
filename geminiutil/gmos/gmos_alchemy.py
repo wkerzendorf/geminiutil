@@ -561,6 +561,9 @@ class GMOSMOSScience(Base):
     mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
 
+
+    raw_fits = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
+                            backref=backref('science_frame', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
@@ -570,6 +573,22 @@ class GMOSMOSScience(Base):
 
 
 
+class GMOSMOSSlice(Base):
+    __tablename__ = 'gmos_mos_slices'
+
+    id = Column(Integer, primary_key=True)
+    list_id = Column(Integer)
+    object_id = Column(Integer)
+    priority = Column(Integer)
+    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science.id'))
+    lower_edge = Column(Float)
+    upper_edge = Column(Float)
+
+    science_frame = relationship(GMOSMOSScience, backref='slices')
+
+    def __repr__(self):
+        return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
+               (self.priority, self.lower_edge, self.upper_edge)
 
 
 

@@ -63,7 +63,7 @@ class GMOSMOSProject(BaseProject):
 
     @property
     def science_frames(self):
-        return zip(*self.session.query(GMOSMOSScience).all())
+        return self.session.query(GMOSMOSScience).all()
 
     def __getattr__(self, item):
         if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
@@ -198,10 +198,9 @@ class GMOSMOSProject(BaseProject):
         for science_frame in science_frames:
             flat = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).filter(ObservationType.name=='flat',
-                                              GMOSMOSRawFITS.mask_id==science_frame.mask_id)\
+                                              GMOSMOSRawFITS.mask_id==science_frame.mask_id,
+                                              GMOSMOSRawFITS.observation_block_id==science_frame.observation_block_id)\
                 .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
-
-            assert flat.observation_block_id == science_frame.observation_block_id
 
             mask_arc = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).join(ObservationClass)\
@@ -209,7 +208,8 @@ class GMOSMOSProject(BaseProject):
                         GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
                 .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
 
-            self.session.add(GMOSMOSScience(flat_id=flat.id, mask_arc_id=mask_arc.id))
+            self.session.add(GMOSMOSScience(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id))
+            logger.info('Link Science Frame %s with:\nMask Arc: %s\nFlat: %s\n', science_frame, flat, mask_arc)
         self.session.commit()
 
 
