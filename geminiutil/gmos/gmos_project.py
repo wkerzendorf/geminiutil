@@ -36,7 +36,7 @@ class GMOSMOSProject(BaseProject):
 
     Now, can get sets of relevant files.  E.g., 
 
-    >>> print proj.observation_class
+    >>> print proj.observation_classes
     (u'daycal', u'acq', u'science', u'partnercal', u'acqcal', u'progcal')
 
     >>> proj.observation_types
@@ -51,7 +51,7 @@ class GMOSMOSProject(BaseProject):
                                              GMOSMOSRawFITS, echo=echo)
 
     @property
-    def observation_class(self):
+    def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
         return zip(*self.session.query(base.ObservationClass.name).all())[0]
 
@@ -62,12 +62,18 @@ class GMOSMOSProject(BaseProject):
 
 
     def __getattr__(self, item):
-        if item in self.observation_types:
-            return self.session.query(GMOSMOSRawFITS).join(
-                ObservationType).filter(ObservationType.name==item).all()
-        elif item in self.observation_class:
-            return self.session.query(GMOSMOSRawFITS).join(
-                ObservationClass).filter(ObservationClass.name==item).all()
+        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationType).\
+                filter(ObservationType.name==item.replace('_query', ''))
+        elif item in self.observation_types:
+            return self.__getattr__(item+'_query').all()
+
+        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).\
+                filter(ObservationClass.name==item.replace('_query', ''))
+
+        elif item in self.observation_classes:
+            return self.__getattr__(item+'_query').all()
         else:
             return self.__getattribute__(item)
 
@@ -181,8 +187,12 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
     def link_science_frames(self):
-        for science_frame in self.science:
-            pass
+
+        science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationType).\
+            filter(ObservationClass.name=='science', ObservationType.name=='object').all()
+        for science_frame in science_frames:
+            print science_frame
+
 
     def initialize_database(self, configuration_dir=None):
         """Read in GMOS filter/grating information, for matching to headers."""
