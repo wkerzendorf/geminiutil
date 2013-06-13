@@ -283,7 +283,7 @@ class GMOSMOSInstrumentSetup(Base):
 
 
     @classmethod
-    def from_fits_object(cls, fits_object):
+    def from_fits_object(cls, fits_object, equivalency_threshold = 0.0001):
         session = object_session(fits_object)
         header = fits_object.fits_data[0].header
         filter1 = header['filter1']
@@ -316,15 +316,14 @@ class GMOSMOSInstrumentSetup(Base):
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
             cls.grating_id==grating_id, cls.instrument_id==instrument_id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
-                                                    / grating_central_wavelength) < 0.0001,
+                                                    / grating_central_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
-                                                    / grating_slit_wavelength) < 0.0001,
+                                                    / grating_slit_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < 0.0001).all()
-        1/0
+                                                    / grating_tilt) < equivalency_threshold).all()
         if instrument_setup_object == []:
-            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order, instrument_id)
+            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength,
+                                          grating_slit_wavelength, grating_tilt, grating_order, instrument_id)
 
             session.add(instrument_setup_object)
             session.commit()
@@ -341,7 +340,7 @@ class GMOSMOSInstrumentSetup(Base):
             return instrument_setup_object
 
         elif len(instrument_setup_object) == 1:
-            return instrument_setup_object
+            return instrument_setup_object[0]
 
         else:
             raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
@@ -354,12 +353,14 @@ class GMOSMOSInstrumentSetup(Base):
             filter(GMOSMOSInstrumentSetup2Detector.instrument_setup_id==self.id).all()
         return detectors
 
-    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
+    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value,
+                 grating_slit_wavelength_value, grating_tilt_value,
                  grating_order, instrument_id):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
+        self.grating_slit_wavelength_value = grating_slit_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
         self.instrument_id = instrument_id
