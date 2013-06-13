@@ -15,6 +15,8 @@ from sqlalchemy import func
 from astropy.utils import misc
 from astropy import units
 
+from astropy import time
+
 import numpy as np
 
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
@@ -311,9 +313,6 @@ class GMOSMOSInstrumentSetup(Base):
 
         instrument_id = base.Instrument.from_fits_object(fits_object).id
 
-
-        instrument_setup2detector = []
-
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
             cls.grating_id==grating_id, cls.instrument_id==instrument_id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
@@ -486,7 +485,7 @@ class GMOSMOSRawFITS(Base):
 
 
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
-    date_obs = Column(DateTime)
+    mjd = Column(Float)
     instrument_id = Column(Integer, ForeignKey('instrument.id'))
     observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
     observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
@@ -519,9 +518,14 @@ class GMOSMOSRawFITS(Base):
     @property
     def associated(self):
         return self.associated_query.all()
-    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
+
+    @property
+    def date_obs(self):
+        return time.Time(self.mjd, scale='utc', format='mjd')
+
+    def __init__(self, mjd, instrument_id, observation_block_id, observation_class_id, observation_type_id,
                  object_id, mask_id=None, instrument_setup_id=None, exclude=False):
-        self.date_obs = date_obs
+        self.mjd = mjd
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
         self.observation_class_id = observation_class_id
@@ -545,6 +549,25 @@ class GMOSMOSPrepared(Base):
     raw_fits = relationship(GMOSMOSRawFITS, backref='prepared_fits')
     fits = relationship(FITSFile, uselist=False)
     #prepare_param_id = Column(Integer)
+
+
+class GMOSMOSScience(Base):
+    __tablename__ = 'gmos_mos_science'
+
+    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
+    flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    day_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    night_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+
+    flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id))
+    day_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id))
+    night_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==night_arc_id))
+
+
+
+
+
+
 
 
 

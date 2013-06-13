@@ -3,7 +3,8 @@ from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
     GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
 import logging
-from datetime import datetime
+
+from astropy import time
 
 import numpy as np
 import re
@@ -115,10 +116,10 @@ class GMOSMOSProject(BaseProject):
 
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], 
                                   fits_file.header['time-obs'])
-        date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
+        mjd = time.Time(date_obs_str, scale='utc').mjd
 
         gmos_raw = self.raw_fits_class(
-            date_obs=date_obs, instrument_id=instrument.id,
+            mjd=mjd, instrument_id=instrument.id,
             observation_block_id=observation_block.id,
             observation_class_id=observation_class.id,
             observation_type_id=observation_type.id, object_id=object.id,
@@ -179,6 +180,9 @@ class GMOSMOSProject(BaseProject):
 
         self.session.commit()
 
+    def link_science_frames(self):
+        for science_frame in self.science:
+            pass
 
     def initialize_database(self, configuration_dir=None):
         """Read in GMOS filter/grating information, for matching to headers."""
