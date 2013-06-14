@@ -1,5 +1,6 @@
 import os, yaml
 from astropy import units as u
+import numpy as np
 
 gmos_data_dir = os.path.join(os.path.dirname(__file__), 'data')
 default_gmos_configuration_fname = os.path.join(gmos_data_dir, 'gmos_configuration.yml')
@@ -38,6 +39,19 @@ class DetectorGeometry(object):
             self.x_pixel_scale.append(x_binning * self.generic_pixelscale)
             self.y_pixel_scale.append(y_binning * self.generic_pixelscale)
 
+
+
+def display_slices_ds9(slice_table, ds9):
+    """
+     Function to display the slices on the table
+    """
+
+    for lower_edge, upper_edge in zip(slice_table['slice_lower_edge'], slice_table['slice_upper_edge']):
+        y_center = 0.5 * (lower_edge + upper_edge) + 1
+        height = upper_edge - lower_edge
+        x_center = 500
+        width = 2000
+        ds9.set('regions', 'image; box %d %d %d %d' % (x_center, y_center, width, height))
 
 
 

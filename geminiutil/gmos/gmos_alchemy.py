@@ -15,6 +15,8 @@ from sqlalchemy import func
 from astropy.utils import misc
 from astropy import units
 
+from astropy import time
+
 import numpy as np
 
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
@@ -281,7 +283,7 @@ class GMOSMOSInstrumentSetup(Base):
 
 
     @classmethod
-    def from_fits_object(cls, fits_object):
+    def from_fits_object(cls, fits_object, equivalency_threshold = 0.0001):
         session = object_session(fits_object)
         header = fits_object.fits_data[0].header
         filter1 = header['filter1']
@@ -311,21 +313,18 @@ class GMOSMOSInstrumentSetup(Base):
 
         instrument_id = base.Instrument.from_fits_object(fits_object).id
 
-
-        instrument_setup2detector = []
-
         instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
             cls.grating_id==grating_id, cls.instrument_id==instrument_id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
-                                                    / grating_central_wavelength) < 0.0001,
+                                                    / grating_central_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
-                                                    / grating_slit_wavelength) < 0.0001,
+                                                    / grating_slit_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < 0.0001).all()
-
+                                                    / grating_tilt) < equivalency_threshold).all()
         if instrument_setup_object == []:
-            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength, grating_tilt,
-                                            grating_order, instrument_id)
+            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength,
+                                          grating_slit_wavelength, grating_tilt, grating_order, instrument_id)
+
             session.add(instrument_setup_object)
             session.commit()
 
@@ -341,7 +340,7 @@ class GMOSMOSInstrumentSetup(Base):
             return instrument_setup_object
 
         elif len(instrument_setup_object) == 1:
-            return instrument_setup_object
+            return instrument_setup_object[0]
 
         else:
             raise ValueError('More than one Instrument setup with the same setup found: %s' % instrument_setup_object)
@@ -354,12 +353,14 @@ class GMOSMOSInstrumentSetup(Base):
             filter(GMOSMOSInstrumentSetup2Detector.instrument_setup_id==self.id).all()
         return detectors
 
-    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value, grating_tilt_value,
+    def __init__(self, filter1_id, filter2_id, grating_id, grating_central_wavelength_value,
+                 grating_slit_wavelength_value, grating_tilt_value,
                  grating_order, instrument_id):
         self.filter1_id = filter1_id
         self.filter2_id = filter2_id
         self.grating_id = grating_id
         self.grating_central_wavelength_value = grating_central_wavelength_value
+        self.grating_slit_wavelength_value = grating_slit_wavelength_value
         self.grating_tilt_value = grating_tilt_value
         self.grating_order = grating_order
         self.instrument_id = instrument_id
@@ -424,8 +425,18 @@ class GMOSMOSInstrumentSetup(Base):
         return detector_information['y-distortion'][self.instrument.name]
 
     @misc.lazyproperty
-    def arcsecpermm(self):
+    def arcsec_per_mm(self):
         return detector_information['arcsecpermm'] * units.Unit('arcsec/mm')
+
+    @misc.lazyproperty
+    def x_pix_per_mm(self):
+        return self.arcsec_per_mm / self.x_scale
+
+    @misc.lazyproperty
+    def y_pix_per_mm(self):
+        return self.arcsec_per_mm / self.y_scale
+
+
 
     @misc.lazyproperty
     def chip_gap(self):
@@ -476,7 +487,7 @@ class GMOSMOSRawFITS(Base):
 
 
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
-    date_obs = Column(DateTime)
+    mjd = Column(Float)
     instrument_id = Column(Integer, ForeignKey('instrument.id'))
     observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
     observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
@@ -509,9 +520,14 @@ class GMOSMOSRawFITS(Base):
     @property
     def associated(self):
         return self.associated_query.all()
-    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id,
+
+    @property
+    def date_obs(self):
+        return time.Time(self.mjd, scale='utc', format='mjd')
+
+    def __init__(self, mjd, instrument_id, observation_block_id, observation_class_id, observation_type_id,
                  object_id, mask_id=None, instrument_setup_id=None, exclude=False):
-        self.date_obs = date_obs
+        self.mjd = mjd
         self.instrument_id = instrument_id
         self.observation_block_id = observation_block_id
         self.observation_class_id = observation_class_id
@@ -535,6 +551,46 @@ class GMOSMOSPrepared(Base):
     raw_fits = relationship(GMOSMOSRawFITS, backref='prepared_fits')
     fits = relationship(FITSFile, uselist=False)
     #prepare_param_id = Column(Integer)
+
+
+class GMOSMOSScience(Base):
+    __tablename__ = 'gmos_mos_science'
+
+    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
+    flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+
+
+
+    raw_fits = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
+                            backref=backref('science_frame', uselist=False))
+    flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
+                        backref=backref('flat2science', uselist=False))
+    mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
+                            backref=backref('mask2science', uselist=False))
+
+
+
+
+
+class GMOSMOSSlice(Base):
+    __tablename__ = 'gmos_mos_slices'
+
+    id = Column(Integer, primary_key=True)
+    list_id = Column(Integer)
+    object_id = Column(Integer)
+    priority = Column(Integer)
+    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science.id'))
+    lower_edge = Column(Float)
+    upper_edge = Column(Float)
+
+    science_frame = relationship(GMOSMOSScience, backref='slices')
+
+    def __repr__(self):
+        return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
+               (self.priority, self.lower_edge, self.upper_edge)
+
+
 
 
 

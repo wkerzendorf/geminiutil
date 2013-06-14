@@ -1,9 +1,11 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScience
 import logging
-from datetime import datetime
+from sqlalchemy import func
+
+from astropy import time
 
 import numpy as np
 import re
@@ -35,7 +37,7 @@ class GMOSMOSProject(BaseProject):
 
     Now, can get sets of relevant files.  E.g., 
 
-    >>> print proj.observation_class
+    >>> print proj.observation_classes
     (u'daycal', u'acq', u'science', u'partnercal', u'acqcal', u'progcal')
 
     >>> proj.observation_types
@@ -50,7 +52,7 @@ class GMOSMOSProject(BaseProject):
                                              GMOSMOSRawFITS, echo=echo)
 
     @property
-    def observation_class(self):
+    def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
         return zip(*self.session.query(base.ObservationClass.name).all())[0]
 
@@ -59,14 +61,23 @@ class GMOSMOSProject(BaseProject):
         """Names of observation types in the database (e.g., 'science')."""
         return zip(*self.session.query(base.ObservationType.name).all())[0]
 
+    @property
+    def science_frames(self):
+        return self.session.query(GMOSMOSScience).all()
 
     def __getattr__(self, item):
-        if item in self.observation_types:
-            return self.session.query(GMOSMOSRawFITS).join(
-                ObservationType).filter(ObservationType.name==item).all()
-        elif item in self.observation_class:
-            return self.session.query(GMOSMOSRawFITS).join(
-                ObservationClass).filter(ObservationClass.name==item).all()
+        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationType).\
+                filter(ObservationType.name==item.replace('_query', ''))
+        elif item in self.observation_types:
+            return self.__getattr__(item+'_query').all()
+
+        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
+            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).\
+                filter(ObservationClass.name==item.replace('_query', ''))
+
+        elif item in self.observation_classes:
+            return self.__getattr__(item+'_query').all()
         else:
             return self.__getattribute__(item)
 
@@ -115,10 +126,10 @@ class GMOSMOSProject(BaseProject):
 
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], 
                                   fits_file.header['time-obs'])
-        date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
+        mjd = time.Time(date_obs_str, scale='utc').mjd
 
         gmos_raw = self.raw_fits_class(
-            date_obs=date_obs, instrument_id=instrument.id,
+            mjd=mjd, instrument_id=instrument.id,
             observation_block_id=observation_block.id,
             observation_class_id=observation_class.id,
             observation_type_id=observation_type.id, object_id=object.id,
@@ -130,6 +141,7 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
         return gmos_raw
+
 
 
     def add_gmos_mask(self, fits_object):
@@ -178,6 +190,28 @@ class GMOSMOSProject(BaseProject):
                 gmos_raw.mask_id = mask.id
 
         self.session.commit()
+
+    def link_science_frames(self):
+
+        science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
+            .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
+        for science_frame in science_frames:
+            flat = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).filter(ObservationType.name=='flat',
+                                              GMOSMOSRawFITS.mask_id==science_frame.mask_id,
+                                              GMOSMOSRawFITS.observation_block_id==science_frame.observation_block_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+            mask_arc = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).join(ObservationClass)\
+                .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
+                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+            self.session.add(GMOSMOSScience(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id))
+            logger.info('Link Science Frame %s with:\nMask Arc: %s\nFlat: %s\n', science_frame, flat, mask_arc)
+        self.session.commit()
+
 
 
     def initialize_database(self, configuration_dir=None):

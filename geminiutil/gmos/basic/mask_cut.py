@@ -4,7 +4,7 @@ from astropy import stats, units, table
 from astropy.io import fits
 
 from scipy import ndimage
-
+import pdb
 import logging
 
 logger = logging.getLogger(__name__)
@@ -81,9 +81,60 @@ def cut_slits(chip_data, mdf_table):
     return final_hdu_list
 
 
+def prepare_mdf_table2(mdf_table, instrument_setup, prepared_fits, slice_fitting_data, shift_bounds=[-20, 20], shift_samples=100):
+
+
+
+    mdf_table = table.Table(mdf_table)
+
+    #calculating the slitsize and slit position from the MDF and instrument information
+    naxis1, naxis2 = prepared_fits.fits.fits_data[1].header['naxis1'] * units.pix, \
+                     prepared_fits.fits.fits_data[1].header['naxis2'] * units.pix
+
+    slit_pos_x = mdf_table['slitpos_mx'] * units.mm
+    slit_pos_x *= instrument_setup.x_pix_per_mm
+    slit_pos_x += (naxis1 / 2) - 1 * units.pix
+
+    slit_pos_y = np.polyval(instrument_setup.y_distortion_coefficients, mdf_table['slitpos_my']) * units.mm
+    slit_pos_y *= instrument_setup.y_pix_per_mm
+    slit_pos_y += (naxis2 / 2) - 1 * units.pix
+
+
+    slit_size_x = mdf_table['slitsize_mx'] * units.mm * instrument_setup.x_pix_per_mm
+    slit_size_y = mdf_table['slitsize_my'] * units.mm * instrument_setup.y_pix_per_mm
+
+
+    slice_lower_edge = (slit_pos_y  - slit_size_y/2 + instrument_setup.y_offset).value
+    slice_upper_edge = slice_lower_edge + slit_size_y.value
+
+    slices1d = np.median(prepared_fits.fits.fits_data[use_chip_for_fit].data, axis=1)
+    slice_model = np.zeros_like(slices1d)
+
+    for slice_lower, slice_upper in zip(slice_lower_edge, slice_upper_edge):
+        lower_idx = np.int(np.round(slice_lower))
+        upper_idx = np.int(np.round(slice_upper))
+        slice_model[lower_idx:upper_idx] = 1.0
+
+    slice_model *= np.median(slices1d)
+
+    rms_space = []
+    pixel_shifts = np.linspace(shift_bounds[0], shift_bounds[1], shift_samples)
+    for shift in pixel_shifts:
+        rms_space.append(((ndimage.shift(slice_model, shift) - slices1d)**2).sum())
+
+    return pixel_shifts, np.array(rms_space)
+
+
+    #table.Table(dict(slice_lower_edge=slice_lower_edge, slice_upper_edge=slice_upper_edge))
+
+
+
+
+
+
 def prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor, wavelength_offset, spectral_pixel_scale,
                 wavelength_start, wavelength_central, wavelength_end, y_distortion_coefficients=[1, 0, 0],
-                arcsecpermm = 1.611444 * units.Unit('arcsec/mm'), y_offset=0.0):
+                arcsecpermm = 1.611444 * units.Unit('arcsec/mm'), y_offset=0.0, instrument_setup=None):
     """
     Prepares the MDF Table to reflect the pixel sections for the different slits
 
@@ -109,13 +160,16 @@ def prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_fa
     slit_pos_mx = slit_pos_mx * units.Unit('mm')
     slit_size_mx, slit_size_my = mdf_table['slitsize_mx'], mdf_table['slitsize_my']
 
+
+    print slit_pos_mx
+    print slit_pos_my
     slit_size_mx = slit_size_mx.data * units.Unit('mm')
     slit_size_my = slit_size_my.data * units.Unit('mm')
     slit_length = slit_size_my * arcsecpermm
 
     logger.debug('Slit length')
     slit_width = slit_size_mx * arcsecpermm
-
+    pdb.set_trace()
     spectrum_width = np.round(1.05 * (slit_length / y_scale).to('pix').value).astype(int) * units.Unit('pix')
     logger.debug('Spectrum Width: %s', spectrum_width)
     spectrum_length = np.round(((wavelength_end - wavelength_start) / spectral_pixel_scale).to('pix').value).astype(int)\
@@ -131,7 +185,7 @@ def prepare_mdf_table(mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_fa
     corrected_ypos = (y_distortion_coefficients[0] * slit_pos_my.data +
                       y_distortion_coefficients[1] * slit_pos_my.data**2 +
                       y_distortion_coefficients[2] * slit_pos_my.data**3) * units.Unit('mm')
-
+    print corrected_ypos
     x_center =  naxis1 / 2.
     y_center = naxis2 / 2.
 

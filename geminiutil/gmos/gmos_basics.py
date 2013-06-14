@@ -147,13 +147,13 @@ class GMOSMOSCutSlits(object):
                 current_instrument_setup.y_distortion_coefficients
             y_offset = current_instrument_setup.y_offset
             anamorphic_factor = current_instrument_setup.anamorphic_factor
-            arcsecpermm = current_instrument_setup.arcsecpermm
+            arcsec_per_mm = current_instrument_setup.arcsec_per_mm
             prepared_mdf_table = mask_cut.prepare_mdf_table(
                 mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor,
                 wavelength_offset, spectral_pixel_scale, wavelength_start,
                 wavelength_central, wavelength_end,
                 y_distortion_coefficients=y_distortion_coefficients,
-                arcsecpermm=arcsecpermm, y_offset=y_offset)
+                arcsecpermm=arcsec_per_mm, y_offset=y_offset, instrument_setup=current_instrument_setup)
 
             cut_hdu_list = mask_cut.cut_slits(chip_data, prepared_mdf_table)
 
