@@ -548,7 +548,7 @@ class GMOSMOSPrepared(Base):
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
     raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
-    raw_fits = relationship(GMOSMOSRawFITS, backref='prepared_fits')
+    raw_fits = relationship(GMOSMOSRawFITS, backref=backref('prepared_fits', uselist=False), uselist=False)
     fits = relationship(FITSFile, uselist=False)
     #prepare_param_id = Column(Integer)
 

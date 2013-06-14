@@ -97,67 +97,23 @@ class GMOSPrepare(object):  # will be base when we know what
         return gmos_mos_prepared
 
 
-class GMOSMOSCutSlits(object):
-        __tablename__ = 'gmosmos_cut_slits'
 
-        file_prefix = 'cut'
+def prepare_science_frame(science_frame, destination_dir='.'):
+    prepare = GMOSPrepare()
 
-        def __init__(self, mode='header_cut'):
-            pass
+    if science_frame.raw_fits.prepared_fits is None:
+        prepared_science = prepare(science_frame.raw_fits, destination_dir=destination_dir)
 
-        def __call__(self, gmos_prepared_object, fname=None,
-                     destination_dir='.', write_steps=False,
-                     write_cut_image=None):
-            """Documentation TBD
-            """
+    if science_frame.flat.prepared_fits is None:
+        prepared_flat = prepare(science_frame.flat, destination_dir=destination_dir)
 
-            if fname is None:
-                fname = '{:s}-{:s}'.format(self.file_prefix,
-                                           gmos_prepared_object.fits.fname)
+    if science_frame.mask_arc.prepared_fits is None:
+        prepared_mask_arc = prepare(science_frame.mask_arc, destination_dir=destination_dir)
 
-            full_path = os.path.join(destination_dir, fname)
+    slices = mask_cut.calculate_slice_geometries(science_frame)
+    session = object_session(science_frame)
+    session.add_all(slices)
+    session.commit()
 
-            fits_data = gmos_prepared_object.fits.fits_data
 
-            # not used any more final_hdu_list = [fits_data[0].copy()]
-            chip_data = [fits_data[i].data for i in range(1, 4)]
 
-            #####
-            #Cutting the Mask
-            #####
-            mdf_table = \
-                gmos_prepared_object.raw_fits.mask.fits.fits_data['MDF'].data
-            naxis1 = fits_data[1].header['naxis1'] * 3
-            naxis2 = fits_data[1].header['naxis2']
-
-            current_instrument_setup = \
-                gmos_prepared_object.raw_fits.instrument_setup
-            x_scale = current_instrument_setup.x_scale
-            y_scale = current_instrument_setup.y_scale
-
-            wavelength_offset = \
-                current_instrument_setup.grating.wavelength_offset
-            spectral_pixel_scale = \
-                current_instrument_setup.spectral_pixel_scale
-            wavelength_start = current_instrument_setup.wavelength_start
-            wavelength_end = current_instrument_setup.wavelength_end
-            wavelength_central = \
-                current_instrument_setup.grating_central_wavelength
-            y_distortion_coefficients = \
-                current_instrument_setup.y_distortion_coefficients
-            y_offset = current_instrument_setup.y_offset
-            anamorphic_factor = current_instrument_setup.anamorphic_factor
-            arcsec_per_mm = current_instrument_setup.arcsec_per_mm
-            prepared_mdf_table = mask_cut.prepare_mdf_table(
-                mdf_table, naxis1, naxis2, x_scale, y_scale, anamorphic_factor,
-                wavelength_offset, spectral_pixel_scale, wavelength_start,
-                wavelength_central, wavelength_end,
-                y_distortion_coefficients=y_distortion_coefficients,
-                arcsecpermm=arcsec_per_mm, y_offset=y_offset, instrument_setup=current_instrument_setup)
-
-            cut_hdu_list = mask_cut.cut_slits(chip_data, prepared_mdf_table)
-
-            cut_hdu_list.insert(0, fits_data[0].copy())
-
-            fits.HDUList(cut_hdu_list).writeto(full_path, clobber=True)
-            return FITSFile.from_fits_file(full_path)
