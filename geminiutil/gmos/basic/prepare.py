@@ -254,7 +254,7 @@ def combine_halves(amp1, amp2):
 
 def adjust_subslices(subslices, factors=None, reverse1=False):
     """Scale subslices and possibly reverse horizontal direction."""
-    if factors:
+    if factors is not None:
         subslices = [multiply_slice(subslice, factor)
                      for subslice, factor in zip(subslices, factors)]
     if reverse1:
@@ -276,29 +276,29 @@ def reverse_slice(in_slice):
 
 def get_subslices(slices1, slices2):
     """Get subslices of slices1 such that a[slices1][out]==a[slices2]"""
-    if slices2:
+    if slices2 is None:
+        return slices1
+    else:
         return [get_subslice(slice1, slice2)
                 for slice1, slice2 in zip(slices1, slices2)]
-    else:
-        return slices1
 
 
 def get_subslice(slice1, slice2):
     assert slice1.start <= slice2.start and slice1.stop >= slice2.stop
     return slice(None if slice2.start == slice1.start
-                 else (slice2.start-slice1.start,
-                       None if slice2.stop == slice1.stop
-                       else slice2.stop-slice1.stop))
+                 else slice2.start-slice1.start,
+                 None if slice2.stop == slice1.stop
+                 else slice2.stop-slice1.stop)
 
 
 def slice_slices(slices1, subslices):
     """Get subslices of slices, such that a[out]==a[slice1][subslices]
     Both slices1 and subslices are lists of slices."""
-    if subslices:
+    if subslices is None:
+        return slices1
+    else:
         return [slice_slice(slice1, subslice)
                 for slice1, subslice in zip(slices1, subslices)]
-    else:
-        return slices1
 
 
 def slice_slice(slice1, subslice):
@@ -345,7 +345,7 @@ def slice2sec(slices):
 
     Note: slices have to contain numbers for start, stop, and step is ignored
     """
-    sec = ','.join(['{0:d}:{1:d}'.format(slc.start+1, slc.stop)
+    sec = ','.join(['{0}:{1}'.format(slc.start+1, slc.stop)
                     for slc in reversed(slices)])
     return '[' + sec + ']'
 
