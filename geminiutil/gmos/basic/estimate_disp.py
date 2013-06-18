@@ -30,6 +30,7 @@ def fake_arc(grid, wavelengths, amplitudes, width, sigma):
         wavelength grid
     wavelengths, amplitudes: float array
         wavelengths and amplitudes of fake lines to be added
+        (use amplitudes=None if no line strengths are required)
     width, sigma : float
         slit width and sigma of other instrumental broadening
 
@@ -39,8 +40,11 @@ def fake_arc(grid, wavelengths, amplitudes, width, sigma):
     """
     within_grid = np.logical_and(wavelengths > grid.min(),
                                  wavelengths < grid.max())
-    g2d = amplitudes[within_grid] * \
-        smoothed_slit(grid, wavelengths[within_grid,np.newaxis], width, sigma)
+    g2d = smoothed_slit(grid, wavelengths[within_grid][:, np.newaxis],
+                        width, sigma)
+    if amplitudes is not None:
+        g2d *= amplitudes[within_grid]
+
     return Table([grid, g2d.sum(axis=0)], names=['w', 'f'])
 
 
@@ -189,15 +193,15 @@ def estimate_disp(arc, wref, xgrid, dispgrid, comparison=None,
     if line_catalog is None:
         model = comparison['w', 'f']
     else:
-        assert model is None
+        assert comparison is None
         xguess = xgrid.mean()
         xsize = xgrid.max()-xgrid.min()
         dispguess = dispgrid.mean()
         model = fake_arc(wref + dispguess*(np.arange(x.min()-xsize*1.2,
                                                      x.max()+xsize*1.2,
                                                      .5) - xguess),
-                         line_catalog, 1.,
-                         slit_width*dispguess, sigma*dispguess)
+                         line_catalog, None,
+                         slit_width*abs(dispguess), sigma*abs(dispguess))
     model.sort('w')
 
     shift = Table([xgrid] +
@@ -207,7 +211,7 @@ def estimate_disp(arc, wref, xgrid, dispgrid, comparison=None,
     for j, dw in enumerate(shift.meta['dw']):
         for i, xref in enumerate(shift['xref']):
             pfit,extra = poly.polyfit(data, np.interp(wref+dw*(x-xref),
-                                                     model['w'], model['f']),
+                                                      model['w'], model['f']),
                                       1, full=True)
             shift['p0'][i,j], shift['p1'][i,j] = pfit
             shift['chi2'][i,j] = np.sqrt(extra[0])
