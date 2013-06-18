@@ -254,11 +254,12 @@ def combine_halves(amp1, amp2):
 
 def adjust_subslices(subslices, factors=None, reverse1=False):
     """Scale subslices and possibly reverse horizontal direction."""
-    if factors is not None:
-        subslices = [multiply_slice(subslice, factor)
-                     for subslice, factor in zip(subslices, factors)]
-    if reverse1:
-        subslices = [subslices[0], reverse_slice(subslices[1])]
+    if subslices is not None:
+        if factors is not None:
+            subslices = [multiply_slice(subslice, factor)
+                         for subslice, factor in zip(subslices, factors)]
+        if reverse1:
+            subslices = [subslices[0], reverse_slice(subslices[1])]
     return subslices
 
 
