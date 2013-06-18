@@ -63,6 +63,9 @@ class GMOSPrepare(object):  # will be base when we know what
         # This does not yet work for GMOS-N
         assert len(fits_data) - 1 == 3
 
+        # MHvK: the below duplicates quite a bit of what is in prepare.prepare
+        # Might be easier just to use that.
+
         for i in xrange(1, len(fits_data)):
             current_amplifier = fits_data[i]
             detector = gmos_raw_object.instrument_setup.detectors[i - 1]
@@ -70,9 +73,18 @@ class GMOSPrepare(object):  # will be base when we know what
             #####
             # Subtracting Overscan
             #####
+            isleftamp = 'left' in current_amplifier.header['AMPNAME']
+            bias_slice = prepare.slice_slices(
+                prepare.sec2slice(current_amplifier.header['BIASSEC']),
+                prepare.adjust_subslices(self.bias_subslice,
+                                         reverse1=isleftamp))
+            data_slice = prepare.slice_slices(
+                prepare.sec2slice(current_amplifier.header['DATASEC']),
+                prepare.adjust_subslices(self.data_subslice,
+                                         reverse1=isleftamp))
+
             amplifier_data = prepare.correct_overscan(current_amplifier,
-                                                      self.bias_subslice,
-                                                      self.data_subslice,
+                                                      bias_slice, data_slice,
                                                       self.bias_clip_sigma)
             #####
             #Correcting the amplifier data gain
@@ -97,23 +109,39 @@ class GMOSPrepare(object):  # will be base when we know what
         return gmos_mos_prepared
 
 
+class GMOSPrepareScienceFrame(GMOSPrepare):
+    def __call__(self, science_frame, **kwargs):
+        prepare = super(GMOSPrepareScienceFrame, self).__call__
+        if science_frame.raw_fits.prepared_fits is None:
+            prepared_science = prepare(science_frame.raw_fits, **kwargs)
+
+        if science_frame.flat.prepared_fits is None:
+            prepared_flat = prepare(science_frame.flat, **kwargs)
+
+        if science_frame.mask_arc.prepared_fits is None:
+            prepared_mask_arc = prepare(science_frame.mask_arc, **kwargs)
+
+        slices = mask_cut.calculate_slice_geometries(science_frame)
+        session = object_session(science_frame)
+        session.add_all(slices)
+        session.commit()
+        return (prepared_science, prepared_flat, prepared_mask_arc,
+                science_frame.slices)
+
 
 def prepare_science_frame(science_frame, destination_dir='.'):
     prepare = GMOSPrepare()
 
     if science_frame.raw_fits.prepared_fits is None:
-        prepared_science = prepare(science_frame.raw_fits, destination_dir=destination_dir)
+        prepare(science_frame.raw_fits, destination_dir=destination_dir)
 
     if science_frame.flat.prepared_fits is None:
-        prepared_flat = prepare(science_frame.flat, destination_dir=destination_dir)
+        prepare(science_frame.flat, destination_dir=destination_dir)
 
     if science_frame.mask_arc.prepared_fits is None:
-        prepared_mask_arc = prepare(science_frame.mask_arc, destination_dir=destination_dir)
+        prepare(science_frame.mask_arc, destination_dir=destination_dir)
 
     slices = mask_cut.calculate_slice_geometries(science_frame)
     session = object_session(science_frame)
     session.add_all(slices)
     session.commit()
-
-
-
