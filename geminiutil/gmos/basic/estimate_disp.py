@@ -135,7 +135,7 @@ def fit_peak2d(x, y, z, peakloc, full=False):
         return x_peak, y_peak
 
 
-def estimate_disp(arc, wref, xgrid, dispgrid, comparison=None,
+def estimate_disp(arc, wref, xref_grid, disp_grid, comparison=None,
                   line_catalog=None, slit_width=7., sigma=1., full=False):
     """Estimate location of reference wavelength and the dispersion of an arc
 
@@ -150,9 +150,9 @@ def estimate_disp(arc, wref, xgrid, dispgrid, comparison=None,
         'x' is present, those will be used; otherwise x=arange(len(arc))
     wref : float
         Reference wavelength for which location in arc is to be found
-    xgrid : array
+    xref_grid : array
         Trial values within which reference wavelength will lie
-    dispgrid : array
+    disp_grid : array
         Trial dispersions within which the real dispersion will lie
     comparison : Table or None
         if given, a Table with the model to match the arc to, containing
@@ -194,20 +194,20 @@ def estimate_disp(arc, wref, xgrid, dispgrid, comparison=None,
         model = comparison['w', 'f']
     else:
         assert comparison is None
-        xguess = xgrid.mean()
-        xsize = xgrid.max()-xgrid.min()
-        dispguess = dispgrid.mean()
-        model = fake_arc(wref + dispguess*(np.arange(x.min()-xsize*1.2,
-                                                     x.max()+xsize*1.2,
-                                                     .5) - xguess),
+        xref_guess = xref_grid.mean()
+        xref_size = xref_grid.max()-xref_grid.min()
+        disp_guess = disp_grid.mean()
+        model = fake_arc(wref + disp_guess*(np.arange(x.min()-xref_size*1.2,
+                                                      x.max()+xref_size*1.2,
+                                                      .5) - xref_guess),
                          line_catalog, None,
-                         slit_width*abs(dispguess), sigma*abs(dispguess))
+                         slit_width*abs(disp_guess), sigma*abs(disp_guess))
     model.sort('w')
 
-    shift = Table([xgrid] +
-                  [np.zeros((xgrid.size, dispgrid.size))]*3,
+    shift = Table([xref_grid] +
+                  [np.zeros((xref_grid.size, disp_grid.size))]*3,
                   names=('xref','chi2','p0','p1'))
-    shift.meta['dw'] = dispgrid
+    shift.meta['dw'] = disp_grid
     for j, dw in enumerate(shift.meta['dw']):
         for i, xref in enumerate(shift['xref']):
             pfit,extra = poly.polyfit(data, np.interp(wref+dw*(x-xref),
