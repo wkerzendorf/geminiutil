@@ -5,7 +5,7 @@ Ensure the out fits headers contain everything required to reproduce the result
 """
 
 from .. base import FITSFile
-import astropy.io.fits as fits
+# import astropy.io.fits as fits
 import logging
 import os
 from geminiutil.gmos.gmos_alchemy import GMOSMOSPrepared
@@ -57,48 +57,29 @@ class GMOSPrepare(object):  # will be base when we know what
 
         fits_data = gmos_raw_object.fits.fits_data
 
-        final_hdu_list = [fits_data[0].copy()]
-
-        # make sure we only have data for 3 fits files.
-        # This does not yet work for GMOS-N
         assert len(fits_data) - 1 == 3
 
-        # MHvK: the below duplicates quite a bit of what is in prepare.prepare
-        # Might be easier just to use that.
+        # subtract overscan, get useful part of detector, correct for gain,
+        # and set read noise
+        read_noise = [detector.readout_noise for detector in
+                      gmos_raw_object.instrument_setup.detectors]
+        gain = [detector.gain for detector in
+                gmos_raw_object.instrument_setup.detectors]
+        fits_file = prepare.prepare(fits_data,
+                                    bias_subslice=self.bias_subslice,
+                                    data_subslice=self.data_subslice,
+                                    clip=self.bias_clip_sigma,
+                                    gain=gain, read_noise=read_noise)
+        # give each extension a name.  May later add error/mask extensions
+        for i, extension in enumerate(fits_file):
+            if i > 0:
+                extension.name = 'chip{0:d}.data'.format(i)
 
-        for i in xrange(1, len(fits_data)):
-            current_amplifier = fits_data[i]
-            detector = gmos_raw_object.instrument_setup.detectors[i - 1]
+        fits_file.writeto(full_path, clobber=True)
 
-            #####
-            # Subtracting Overscan
-            #####
-            isleftamp = 'left' in current_amplifier.header['AMPNAME']
-            bias_slice = prepare.slice_slices(
-                prepare.sec2slice(current_amplifier.header['BIASSEC']),
-                prepare.adjust_subslices(self.bias_subslice,
-                                         reverse1=isleftamp))
-            data_slice = prepare.slice_slices(
-                prepare.sec2slice(current_amplifier.header['DATASEC']),
-                prepare.adjust_subslices(self.data_subslice,
-                                         reverse1=isleftamp))
-
-            amplifier_data = prepare.correct_overscan(current_amplifier,
-                                                      bias_slice, data_slice,
-                                                      self.bias_clip_sigma)
-            #####
-            #Correcting the amplifier data gain
-            #####
-
-            amplifier_data = prepare.correct_gain(amplifier_data,
-                                                  gain=detector.gain)
-            amplifier_data.name = 'chip%d.data' % i
-
-            final_hdu_list += [amplifier_data]
-
-            fits.HDUList(final_hdu_list).writeto(full_path, clobber=True)
-
+        # read it back in and add to database
         fits_file = FITSFile.from_fits_file(full_path)
+
         session = object_session(gmos_raw_object)
         session.add(fits_file)
         session.commit()
