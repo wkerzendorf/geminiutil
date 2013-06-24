@@ -163,8 +163,8 @@ class LineTable(Table):
         self['id'] = catalog[ix]
         self['resid'] = self['fit']-catalog[ix]
         self.mask['resid'] = False
-        self.mask['id'] = np.logical_or(np.abs(self['resid']) > mindist,
-                                        self['peak'] < minpeak)
+        self.mask['id'] = ((np.abs(self['resid']) > mindist) |
+                           (self['peak'] < minpeak))
 
     def fit(self, *args):
         """Return fitted wavelengths for input positions:
@@ -370,9 +370,9 @@ def search(arc, min_counts=None, min_curvature=None, sigma=None, x=None):
     if sigma is not None:
         arc = gaussian_filter1d(arc, sigma, mode='nearest')
 
-    peak = np.logical_and(arc[1:-1] > arc[:-2], arc[1:-1] > arc[2:])
+    peak = (arc[:-2] < arc[1:-1]) & (arc[1:-1] > arc[2:])
     if min_counts is not None:
-        peak = np.logical_and(peak, arc[1:-1] > min_counts)
+        peak &= arc[1:-1] > min_counts
 
     peakloc = np.where(peak)[0]+1
     x0, y0 = x[peakloc], arc[peakloc]

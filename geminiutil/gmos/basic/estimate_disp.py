@@ -38,8 +38,7 @@ def fake_arc(grid, wavelengths, amplitudes, width, sigma):
     -------
     Table with columns 'w' holding the input grid and 'f' holding the fake arc
     """
-    within_grid = np.logical_and(wavelengths > grid.min(),
-                                 wavelengths < grid.max())
+    within_grid = (grid.min() < wavelengths) & (wavelengths < grid.max())
     g2d = smoothed_slit(grid, wavelengths[within_grid][:, np.newaxis],
                         width, sigma)
     if amplitudes is not None:
