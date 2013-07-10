@@ -553,8 +553,8 @@ class GMOSMOSPrepared(Base):
     #prepare_param_id = Column(Integer)
 
 
-class GMOSMOSScience(Base):
-    __tablename__ = 'gmos_mos_science'
+class GMOSMOSScienceSet(Base):
+    __tablename__ = 'gmos_mos_science_set'
 
     id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
     flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
@@ -562,7 +562,7 @@ class GMOSMOSScience(Base):
 
 
 
-    raw_fits = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
+    science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
                             backref=backref('science_frame', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))

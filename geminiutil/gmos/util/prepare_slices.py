@@ -1,84 +1,10 @@
 import numpy as np
-import itertools
-from astropy import stats, units, table
-from astropy.io import fits
-
+from astropy import units, table
 from scipy import ndimage
 from geminiutil.gmos.gmos_alchemy import GMOSMOSSlice
 import logging
 
 logger = logging.getLogger(__name__)
-
-def find_mask_edges(flat_image, use_image_columns=slice(None), gauss_filter_sigma=3, sigma_clip_sigma=2, sigma_clip_iter=5):
-    """
-        Finding the mask edges with a gradient image
-
-        Parameters
-        ----------
-
-        flat_image : ~numpy.ndarray
-            Image (preferably a flat) to be used for finding the edges
-
-    """
-
-    gradient_image = np.diff(flat_image, axis=0)
-
-    gradient_profile = ndimage.gaussian_filter(np.median(gradient_image[:, use_image_columns], axis=1),
-                                               sigma=gauss_filter_sigma)
-
-    clipped_gradient_profile = stats.sigma_clip(gradient_profile, sig=sigma_clip_sigma, iters=sigma_clip_iter, maout=True)
-
-    peak_mask = clipped_gradient_profile.mask & (clipped_gradient_profile.data >= 0)
-    trough_mask = clipped_gradient_profile.mask & (clipped_gradient_profile.data < 0)
-
-    peaks = np.ma.MaskedArray(clipped_gradient_profile.data, mask=~peak_mask)
-    troughs = np.ma.MaskedArray(clipped_gradient_profile.data, mask=~trough_mask)
-
-    pixel_index = np.arange(len(peaks))
-    lower_edge_groups = [list(group) for key, group in itertools.groupby(pixel_index, lambda x: peaks.mask[x])
-                         if key==False]
-
-    lower_edges = []
-    for edge_group in lower_edge_groups:
-        if len(edge_group) == 1:
-            continue
-
-        lower_edges.append(np.average(edge_group, weights=gradient_profile[edge_group]))
-
-    lower_edges = np.array(lower_edges)
-
-    upper_edge_groups = [list(group) for key, group in itertools.groupby(pixel_index, lambda x: troughs.mask[x])
-                         if key==False]
-
-    upper_edges = []
-    for edge_group in upper_edge_groups:
-        if len(edge_group) == 1:
-            continue
-
-        upper_edges.append(np.average(edge_group, weights=gradient_profile[edge_group]))
-
-    upper_edges = np.array(upper_edges)
-
-    return peaks, troughs, lower_edges, upper_edges
-
-
-def cut_slits(chip_data, mdf_table):
-
-    #check if the table has been prepared
-    if 'SECX1' not in mdf_table.colnames:
-        raise ValueError('The supplied table has not been prepared')
-
-    final_hdu_list = fits.HDUList()
-
-    for chip_id, data in enumerate(chip_data):
-        for i, (sec_y1, sec_y2) in enumerate(mdf_table['SECY1', 'SECY2']):
-            current_slice = slice(sec_y1, sec_y2)
-            data_slice = data[current_slice].copy()
-
-
-            final_hdu_list.append(fits.ImageHDU(data_slice, name='slice%d.chip%d.data' % (i, chip_id+1)))
-
-    return final_hdu_list
 
 
 def calculate_slice_geometries(science_frame, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5):
@@ -141,6 +67,3 @@ def calculate_slice_geometries(science_frame, shift_bounds=[-20, 20], shift_samp
                             slice_set_id=science_frame.id, lower_edge=slice_lower_edge[i]+fitted_shift,
                             upper_edge=slice_upper_edge[i]+fitted_shift))
     return slices
-
-
-
