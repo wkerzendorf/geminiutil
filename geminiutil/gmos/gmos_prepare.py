@@ -10,7 +10,7 @@ Ensure the out fits headers contain everything required to reproduce the result
 """
 
 from geminiutil.base import FITSFile
-from geminiutil.gmos.util import prepare_data, prepare_slices
+from geminiutil.gmos.util import prepare_frame, prepare_slices
 from geminiutil.gmos import GMOSMOSPrepared
 import logging
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class GMOSPrepareFrame(object):  # will be base when we know what
                       gmos_raw_object.instrument_setup.detectors]
         gain = [detector.gain for detector in
                 gmos_raw_object.instrument_setup.detectors]
-        fits_file = prepare_data.prepare(fits_data,
+        fits_file = prepare_frame.prepare(fits_data,
                                     bias_subslice=self.bias_subslice,
                                     data_subslice=self.data_subslice,
                                     clip=self.bias_clip_sigma,

@@ -32,7 +32,7 @@ import extract_psf.extract as extract
 from astropy.table import Table
 import astropy.units as u
 
-from prepare_data import multiext_data, multiext_header_value, multiext_x_coords
+from prepare_frame import multiext_data, multiext_header_value, multiext_x_coords
 from wavecal import LineTable, ThreeChipLineTable
 import estimate_disp
 
