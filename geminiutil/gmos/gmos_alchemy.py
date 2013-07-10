@@ -571,8 +571,6 @@ class GMOSMOSScience(Base):
 
 
 
-
-
 class GMOSMOSSlice(Base):
     __tablename__ = 'gmos_mos_slices'
 
@@ -592,5 +590,16 @@ class GMOSMOSSlice(Base):
 
 
 
+class GMOSMOSSliceWaveCal(Base):
+    __tablename__ = 'gmos_mos_slice_wavecal'
+
+    id = Column(Integer, primary_key=True)
+    slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
+    wave_cal_type_id = Column(Integer, ForeignKey('wave_cal_type.id'))
+    raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    list_id = Column(Integer)
+    model = Column(String)
+
+    slice = relationship(GMOSMOSSlice, backref='slice_wavecal')
 
 

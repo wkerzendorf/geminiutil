@@ -249,6 +249,16 @@ class Operations(Base):
         self.session.add(self)
         self.session.commit()
 
+class WaveCalType(Base):
+    __tablename__ = 'wave_cal_type'
+
+    #initialize with 0=guess, 1=arc, 2=sky
+
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String, default=None)
+
 
 """
 class GeminiRawFITS(object):

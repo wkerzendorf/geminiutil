@@ -91,6 +91,7 @@ class GMOSPrepare(object):  # will be base when we know what
 
 
 class GMOSPrepareScienceFrame(GMOSPrepare):
+
     def __call__(self, science_frame, **kwargs):
         prepare = super(GMOSPrepareScienceFrame, self).__call__
         if science_frame.raw_fits.prepared_fits is None:

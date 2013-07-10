@@ -27,7 +27,7 @@ from __future__ import print_function, division
 
 import numpy as np
 
-import extract_psf.extract as extract
+#import extract_psf.extract as extract
 from astropy.table import Table
 
 from prepare import multiext_data, multiext_header_value, multiext_x_coords
