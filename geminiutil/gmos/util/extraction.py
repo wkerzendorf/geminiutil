@@ -4,7 +4,9 @@ from astropy.table import Table
 import extract_psf.extract as extract
 
 
-def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
+def extract_spectrum(gmos_slice, tracepos=None,
+                     model_errors=1, ff_noise=0.03,
+                     skypol=0):
 
     scidata = np.array(gmos_slice.get_prepared_science_data())
     read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
@@ -20,8 +22,8 @@ def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
         (out,eout,back,chi2,test,
          ntdiscard,ntbadl,ntbadh,
          nproblems) = extract.extract(scidata, tracepos, psf,
-                                      e=error_estimate, skypol=0,
-                                      ibadlimit=2, squeeze_dims=False,
+                                      e=error_estimate, skypol=skypol,
+                                      ibadlimit=5, squeeze_dims=False,
                                       itesttype=101 if i < model_errors
                                       else 103)
         # set error source to test frame
@@ -39,7 +41,7 @@ def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
     x = x_offset + x_binning*np.arange(0.5, ndisp) - 0.5
     scitab = Table([np.array(x, dtype=np.float32)] +
                    [a.transpose(2,0,1) for a in [out, eout, back, chi2]],
-                   names=['x', 'f', 'e', 's', 'chi2'])
+                   names=['x', 'source', 'error', 'sky', 'chi2'])
 
     # fits0_header = prep_sci_fits[0].header
     # for hdr in fits0_header:
