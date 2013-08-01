@@ -22,12 +22,18 @@ class GMOSPrepareFrame(object):  # will be base when we know what
 
     file_prefix = 'prep'
 
-    def __init__(self, bias_subslice=None,
-                 data_subslice=None,
-                 bias_clip_sigma=3.):
+    def __init__(self, bias_subslice=[slice(None), slice(1,11)],
+            data_subslice=None, bias_clip_sigma=3.,
+            gain=None, read_noise=None, combine=True,
+            overscan_std_threshold=3.):
+
         self.bias_subslice = bias_subslice
         self.data_subslice = data_subslice
+        self.gain = gain
         self.bias_clip_sigma = bias_clip_sigma
+        self.read_noise = read_noise
+        self.combine = combine
+        self.overscan_std_threshold = overscan_std_threshold
 
     def __call__(self, gmos_raw_object, fname=None, destination_dir='.'):
         """
@@ -62,15 +68,25 @@ class GMOSPrepareFrame(object):  # will be base when we know what
 
         # subtract overscan, get useful part of detector, correct for gain,
         # and set read noise
-        read_noise = [detector.readout_noise for detector in
-                      gmos_raw_object.instrument_setup.detectors]
-        gain = [detector.gain for detector in
-                gmos_raw_object.instrument_setup.detectors]
+        if self.read_noise is None:
+            read_noise = [detector.readout_noise for detector in
+                          gmos_raw_object.instrument_setup.detectors]
+        else:
+            read_noise = self.read_noise
+
+        if self.gain is None:
+            gain = [detector.gain for detector in
+                    gmos_raw_object.instrument_setup.detectors]
+        else:
+            gain = self.gain
+
+
         fits_file = prepare_frame.prepare(fits_data,
                                     bias_subslice=self.bias_subslice,
                                     data_subslice=self.data_subslice,
                                     clip=self.bias_clip_sigma,
-                                    gain=gain, read_noise=read_noise)
+                                    gain=gain, read_noise=read_noise, combine=self.combine,
+                                    overscan_std_threshold=self.overscan_std_threshold)
         # give each extension a name.  May later add error/mask extensions
         for i, extension in enumerate(fits_file):
             if i > 0:
@@ -96,14 +112,14 @@ class GMOSPrepareScienceSet(object):
     def __init__(self, prepare_function):
         self.prepare = prepare_function
 
-    def __call__(self, science_set):
+    def __call__(self, science_set, destination_dir='.'):
 
         for item in ['science', 'flat', 'mask_arc']:
             current_frame = getattr(science_set, item)
-            if current_frame.prepared_fits is None:
+            if current_frame.prepared_fits is not None:
                 logger.warn('Prepared fits already exists for %s -- skipping', current_frame)
             else:
-                prepared_fits = self.prepare()
+                prepared_fits = self.prepare(current_frame, destination_dir=destination_dir)
 
         slices = prepare_slices.calculate_slice_geometries(science_set)
         session = object_session(science_set)
