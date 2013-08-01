@@ -99,7 +99,11 @@ class GMOSPrepareScienceSet(object):
     def __call__(self, science_set):
 
         for item in ['science', 'flat', 'mask_arc']:
-            prepared_fits = self.prepare(getattr(science_set, item))
+            current_frame = getattr(science_set, item)
+            if current_frame.prepared_fits is None:
+                logger.warn('Prepared fits already exists for %s -- skipping', current_frame)
+            else:
+                prepared_fits = self.prepare()
 
         slices = prepare_slices.calculate_slice_geometries(science_set)
         session = object_session(science_set)
