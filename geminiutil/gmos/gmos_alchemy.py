@@ -588,6 +588,7 @@ class GMOSMOSSlice(Base):
         return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
                (self.priority, self.lower_edge, self.upper_edge)
 
+
     @property
     def prepared_science_fits_data(self):
         return self.science_set.science.prepared_fits.fits.fits_data
