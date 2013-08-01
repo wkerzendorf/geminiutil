@@ -588,13 +588,19 @@ class GMOSMOSSlice(Base):
         return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
                (self.priority, self.lower_edge, self.upper_edge)
 
+    @property
+    def prepared_science_fits_data(self):
+        return self.science_set.science.prepared_fits.fits.fits_data
+
     def get_prepared_science_data(self):
-        fits_data = self.science_set.science.prepared_fits.fits.fits_data
+        fits_data = self.prepared_science_fits_data
         science_slice = slice(np.ceil(self.lower_edge).astype(int), np.ceil(self.upper_edge).astype(int))
-        science_slice_data = np.array([fits_data[chip].data[science_slice, :] for chip in xrange(1, 4)])
+        science_slice_data = [fits_data[chip].data[science_slice, :] for chip in xrange(1, 4)]
 
         return science_slice_data
 
+    def get_read_noises(self):
+        return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
 
 class GMOSMOSSliceWaveCal(Base):
