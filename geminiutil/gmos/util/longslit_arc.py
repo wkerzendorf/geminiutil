@@ -2,11 +2,11 @@
 
 Sample usage
 ------------
-arctab = dayarc.get_arcs(fits.open(arcfitsname))
-lines = dayarc.find_lines(arctab, min_curvature=[5.,3.,2.])
+arctab = longslit_arc.get_arcs(fits.open(arcfitsname))
+lines = longslit_arc.find_lines(arctab, min_curvature=[5.,3.,2.])
 chip1guess = [xrefguess, dwguess, 0.]
 chippar = [2087.3, 1.5]
-linesall = dayarc.calibrate(
+linesall = longslit_arc.calibrate(
                 lines, arctab.meta['grwlen']*10, chip1guess, lincat['w'],
                 minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
                 chippar=chippar,
@@ -19,8 +19,8 @@ Notes
 Above, arcfitsname would be a "prepared" file, for which bias subtraction and
 gain correction has been done, and a relevant region extracted, e.g., by
 
-PrepDayArc = gmos_prepare.Prepare(data_subslice=[slice(1150,1250),slice(-1)])
-PrepDayArc(fits.open('some-raw-fits-file')).writeto(arcfitsname)
+PrepLongslitArc = gmos_prepare.Prepare(data_subslice=[slice(1150,1250),slice(-1)])
+PrepLongslitArc(fits.open('some-raw-fits-file')).writeto(arcfitsname)
 """
 
 from __future__ import print_function, division
@@ -37,7 +37,7 @@ from wavecal import LineTable, ThreeChipLineTable
 import estimate_disp
 
 
-class GMOSDayArc(object):
+class GMOSLongslitArc(object):
     def __init__(self, line_catalog,
                  xref_grid=np.arange(-40, 40),
                  frac_disp_grid=np.linspace(0.97, 1.03, 31),
