@@ -3,28 +3,12 @@ from astropy.table import Table
 
 import extract_psf.extract as extract
 
-def extract_spectrum(gmos_slice, model_errors=1, ff_noise=0.03):
+def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
 
-    slitno = gmos_slice.list_id
-    raw_science = gmos_slice.science_set.science
-    prep_science = raw_science.prepared_fits
-    instrument_setup = raw_science.instrument_setup
-    x_binning = instrument_setup.x_binning
-    y_binning = instrument_setup.y_binning
-    prep_fits = prep_science.fits.fits_data
-
-    sci_slice = slice(*(np.ceil(edge).astype(int)
-                        for edge in (gmos_slice.lower_edge,
-                                     gmos_slice.upper_edge)))
-
-    scidata = np.array([prep_fits[chip].data[sci_slice, :]
-                        for chip in range(1,4)])
-    read_noise = np.array([amp.header['RDNOISE']
-                           for amp in prep_fits[1:]]).reshape(-1,1,1)
-
-    tracepos = np.array([scidata.shape[1]/2. -
-                         raw_science.mask.table[slitno]['specpos_y'] /
-                         y_binning])
+    scidata = np.array(gmos_slice.get_prepared_science_data())
+    read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
+    if tracepos is None:
+        tracepos = np.array([gmos_slice.default_trace_position])
 
     #return scidata, read_noise, tracepos
 
