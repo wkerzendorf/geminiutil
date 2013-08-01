@@ -26,7 +26,6 @@ def extract_spectrum(gmos_slice, model_errors=1, ff_noise=0.03):
     tracepos = np.array([scidata.shape[1]/2. -
                          raw_science.mask.table[slitno]['specpos_y'] /
                          y_binning])
-    return scidata, read_noise, tracepos
 
     e_source = scidata
     psf = extract.PSF(form=0, guesses=[[0., 0.], 8., (2.5, '@')])
@@ -70,4 +69,4 @@ def extract_spectrum(gmos_slice, model_errors=1, ff_noise=0.03):
     scitab.meta['nbad'] = [ntbadl, ntbadh]
     scitab.meta['nproblems'] = nproblems
 
-    return scitab
+    return scitab, test
