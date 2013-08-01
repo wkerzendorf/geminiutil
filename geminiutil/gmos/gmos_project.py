@@ -62,7 +62,7 @@ class GMOSMOSProject(BaseProject):
         return zip(*self.session.query(base.ObservationType.name).all())[0]
 
     @property
-    def science_frames(self):
+    def science_sets(self):
         return self.session.query(GMOSMOSScienceSet).all()
 
     def __getattr__(self, item):
