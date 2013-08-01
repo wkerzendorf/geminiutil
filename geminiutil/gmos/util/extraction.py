@@ -3,7 +3,10 @@ from astropy.table import Table
 
 import extract_psf.extract as extract
 
-def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
+
+def extract_spectrum(gmos_slice, tracepos=None,
+                     model_errors=1, ff_noise=0.03,
+                     skypol=0):
 
     scidata = np.array(gmos_slice.get_prepared_science_data())
     read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
