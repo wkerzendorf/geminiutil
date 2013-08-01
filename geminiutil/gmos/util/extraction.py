@@ -4,28 +4,12 @@ from astropy.table import Table
 import extract_psf.extract as extract
 
 
-def extract_spectrum(gmos_slice, model_errors=1, ff_noise=0.03):
+def extract_spectrum(gmos_slice, tracepos=None, model_errors=1, ff_noise=0.03):
 
-    slitno = gmos_slice.list_id
-    raw_science = gmos_slice.science_set.science
-    prep_science = raw_science.prepared_fits
-    instrument_setup = raw_science.instrument_setup
-    x_binning = instrument_setup.x_binning
-    y_binning = instrument_setup.y_binning
-    prep_fits = prep_science.fits.fits_data
-
-    sci_slice = slice(*(np.ceil(edge).astype(int)
-                        for edge in (gmos_slice.lower_edge,
-                                     gmos_slice.upper_edge)))
-
-    scidata = np.array([prep_fits[chip].data[sci_slice, :]
-                        for chip in range(1,4)])
-    read_noise = np.array([amp.header['RDNOISE']
-                           for amp in prep_fits[1:]]).reshape(-1,1,1)
-
-    tracepos = np.array([scidata.shape[1]/2. -
-                         raw_science.mask.table[slitno]['specpos_y'] /
-                         y_binning])
+    scidata = np.array(gmos_slice.get_prepared_science_data())
+    read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
+    if tracepos is None:
+        tracepos = np.array([gmos_slice.default_trace_position])
 
     e_source = scidata
     psf = extract.PSF(form=0, guesses=[[0., 0.], 8., (2.5, '@')])
@@ -47,8 +31,11 @@ def extract_spectrum(gmos_slice, model_errors=1, ff_noise=0.03):
     # Note: out.shape=(nstar,norder,nwav) but need
     #       (nwav,nstar,norder) for nstar>1 -> transpose(2,0,1)
     #       (nwav,norder) for nstar=1 -> transpose(1,0)
+
+    instrument_setup = gmos_slice.science_set.science.instrument_setup
+    x_binning = instrument_setup.x_binning
     x_offset = 0
-    ndisp = prep_fits[1].data.shape[-1]
+    ndisp = scidata.shape[-1]
     x = x_offset + x_binning*np.arange(0.5, ndisp) - 0.5
     scitab = Table([np.array(x, dtype=np.float32)] +
                    [a.transpose(2,0,1) for a in [out, eout, back, chi2]],
