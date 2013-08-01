@@ -46,7 +46,7 @@ class GMOSDayArc(object):
                  minlist2=[(2.,0.), (0.26,0.), (0.1,0.)]):
         try:  # is this a quantity with a unit of length?
             line_catalog.to(u.m)
-        except:  # convert to Å
+        except:  # convert to angstrom
             self.line_catalog = u.Quantity(line_catalog, u.Angstrom)
         else:
             self.line_catalog = line_catalog
@@ -75,7 +75,7 @@ class GMOSDayArc(object):
         # slit width not yet in data base for long slits
         slit_width = prepared_arc.fits.fits_data[0].header['maskname']
         slit_width = float(slit_width.replace('arcsec','')) * u.arcsec
-        # get resolution in Å, and then in pixels
+        # get resolution in angstrom, and then in pixels
         slit_width = wref / instrument_setup.calculate_resolution(slit_width)
         slit_width /= abs(disp_guess)
         slit_sigma = abs(disp_guess)  # additional instrumental broadening

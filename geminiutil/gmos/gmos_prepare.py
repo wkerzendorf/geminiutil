@@ -99,11 +99,9 @@ class GMOSPrepareScienceSet(object):
     def __call__(self, science_set):
 
         for item in ['science', 'flat', 'mask_arc']:
-
             prepared_fits = self.prepare(getattr(science_set, item))
 
         slices = prepare_slices.calculate_slice_geometries(science_set)
         session = object_session(science_set)
         session.add_all(slices)
         session.commit()
-

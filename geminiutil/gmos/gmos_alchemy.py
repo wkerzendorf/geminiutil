@@ -578,11 +578,11 @@ class GMOSMOSSlice(Base):
     list_id = Column(Integer)
     object_id = Column(Integer)
     priority = Column(Integer)
-    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science.id'))
+    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science_set.id'))
     lower_edge = Column(Float)
     upper_edge = Column(Float)
 
-    science_frame = relationship(GMOSMOSScience, backref='slices')
+    science_set = relationship(GMOSMOSScienceSet, backref='slices')
 
     def __repr__(self):
         return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
