@@ -514,7 +514,7 @@ class GMOSMOSRawFITS(Base):
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
 
-    instrument_setup = relationship(GMOSMOSInstrumentSetup)
+    instrument_setup = relationship(GMOSMOSInstrumentSetup, backref='raw_fits')
 
 
     @property
