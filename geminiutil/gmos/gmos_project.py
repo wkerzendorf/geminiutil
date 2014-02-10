@@ -10,6 +10,7 @@ from astropy import time
 import numpy as np
 import re
 import os
+import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -163,15 +164,30 @@ class GMOSMOSProject(BaseProject):
     def link_masks(self):
         """For each MOS observation, link it to the corresponding mask file."""
         for gmos_raw in self.session.query(GMOSMOSRawFITS):
+            slit_mask_pattern = re.compile('G[SN]\d{4}.+')
+            longslit_mask_pattern = re.compile('(\d+)\.(\d+)arcsec')
             if gmos_raw.mask_id is not None:
                 logger.debug('Mask is already set for %s - moving on', 
                              gmos_raw.fits.fname)
                 continue
             mask_name = gmos_raw.fits.header['maskname']
-            if re.match('G[SN]\d{4}.+', mask_name) is None:
-                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname', 
+
+            if longslit_mask_pattern.match(mask_name) is not None:
+
+                if self.session.query(GMOSMask).filter_by(
+                        name=mask_name.strip().lower()).count() == 0:
+                    program_id = self.session.query(base.Program).filter_by(
+                        name=gmos_raw.fits.header['GEMPRGID'].lower().strip()).one().id
+                    longslit_placeholder_mask = GMOSMask(mask_name, program_id)
+                    self.session.add(longslit_placeholder_mask)
+                    self.session.commit()
+
+
+            elif slit_mask_pattern.match(mask_name) is None:
+                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname',
                             mask_name, gmos_raw.fits.fname)
                 continue
+
             masks_found = self.session.query(GMOSMask).filter_by(
                 name=mask_name.strip().lower()).count()
             if masks_found == 0:
@@ -183,15 +199,16 @@ class GMOSMOSProject(BaseProject):
                             ' please check', mask_name)
                 continue
             else:
-                logger.info('Linking %s with mask %s', 
+                logger.info('Linking %s with mask %s',
                             gmos_raw.fits.fname, mask_name)
                 mask = self.session.query(GMOSMask).filter_by(
                     name=mask_name.strip().lower()).one()
                 gmos_raw.mask_id = mask.id
 
+
         self.session.commit()
 
-    def link_science_sets(self):
+    def link_science_sets(self, ):
 
         science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
             .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
@@ -205,6 +222,12 @@ class GMOSMOSProject(BaseProject):
             mask_arc = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).join(ObservationClass)\
                 .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
+                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+
+            longslit_arc = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).join(ObservationClass).join(GMOSMask)\
+                .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask.name==longslit_arc_mask_name,
                         GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
                 .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
 

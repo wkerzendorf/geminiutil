@@ -35,7 +35,8 @@ from sqlalchemy import String, Integer, Float, DateTime, Boolean
 class GMOSMask(Base):
     __tablename__ = 'gmos_mask'
 
-    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
+    id = Column(Integer, primary_key=True)
+    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
     name = Column(String)
     program_id = Column(Integer, ForeignKey('program.id'))
 
@@ -51,7 +52,7 @@ class GMOSMask(Base):
         mask_name = fits_object.header['DATALAB'].lower().strip()
         mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
         mask_object = cls(mask_name, mask_program.id)
-        mask_object.id = fits_object.id
+        mask_object.fits_id = fits_object.id
         return mask_object
 
 
@@ -559,7 +560,7 @@ class GMOSMOSScienceSet(Base):
     id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
     flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
     mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
-
+    longslit_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
 
     science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
@@ -569,6 +570,8 @@ class GMOSMOSScienceSet(Base):
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
                             backref=backref('mask2science', uselist=False))
 
+    longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
+                            backref=backref('mask2science', uselist=False))
 
 
 class GMOSMOSSlice(Base):
