@@ -35,6 +35,10 @@ from sqlalchemy import String, Integer, Float, DateTime, Boolean
 class GMOSMask(Base):
     __tablename__ = 'gmos_mask'
 
+
+    # GMOSMasks don't have the fits_id as the primary key anymore.
+    #The reason for this change is that for a longslit exposure there exists no mask exposure.
+
     id = Column(Integer, primary_key=True)
     fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
     name = Column(String)
@@ -562,16 +566,15 @@ class GMOSMOSScienceSet(Base):
     mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
     longslit_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
-
     science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
                             backref=backref('science_frame', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
-                            backref=backref('mask2science', uselist=False))
+                            backref=backref('mask_arc2science', uselist=False))
 
     longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
-                            backref=backref('mask2science', uselist=False))
+                            backref=backref('long_arc2science', uselist=False))
 
 
 class GMOSMOSSlice(Base):
