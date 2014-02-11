@@ -573,7 +573,7 @@ class GMOSMOSScienceSet(Base):
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
                             backref=backref('mask_arc2science', uselist=False))
 
-    longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
+    longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==longslit_arc_id),
                             backref=backref('long_arc2science', uselist=False))
 
 

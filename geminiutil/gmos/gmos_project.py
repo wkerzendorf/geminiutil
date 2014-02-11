@@ -255,6 +255,7 @@ class GMOSMOSProject(BaseProject):
             if len(mask_arc) != 1:
                 logger.warn('Science Frame {0} has more than one mask arc:\n{1} - selecting closest arc'.format(science_frame, '\n'.join(map(str, mask_arc))))
             mask_arc = mask_arc[0]
+
             requested_instrument_setup_id = science_instrument2longslit_instrument[science_frame.instrument_setup_id]
             longslit_arcs = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).join(ObservationClass).join(GMOSMask)\
@@ -267,6 +268,7 @@ class GMOSMOSProject(BaseProject):
                 raise GMOSDBError('Requested longslit_arc is not found')
 
             longslit_arc = longslit_arcs[0]
+
             if (longslit_arc.mjd - science_frame.mjd) > 2:
                 logger.warn('The closest arc was taken more than 2 days before/after the current science frame')
 
