@@ -482,8 +482,8 @@ class GMOSMOSInstrumentSetup(Base):
 
 
     def __repr__(self):
-        return "<GMOS MOS Instrument Setup Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
-                (self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
+        return "<GMOS MOS Instrument Setup ID=%s Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
+                (self.id, self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
                 self.grating_central_wavelength_unit)
 
 
