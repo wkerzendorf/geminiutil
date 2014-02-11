@@ -10,10 +10,14 @@ from astropy import time
 import numpy as np
 import re
 import os
+import pdb
 
 logger = logging.getLogger(__name__)
 
 default_configuration_dir = os.path.join(os.path.dirname(__file__), 'data')
+
+class GMOSDBError(ValueError):
+    pass
 
 class GMOSMOSProject(BaseProject):
     """GMOS multi-object spectroscopy project.
@@ -64,6 +68,18 @@ class GMOSMOSProject(BaseProject):
     @property
     def science_sets(self):
         return self.session.query(GMOSMOSScienceSet).all()
+
+    #showing the different setups for science exposures
+    @property
+    def science_instrument_setups(self):
+        return self.session.query(GMOSMOSInstrumentSetup).join(GMOSMOSRawFITS)\
+            .join(ObservationClass).filter(ObservationClass.name == 'science').all()
+
+    #showing the different setups for longslit_arcs
+    @property
+    def longslit_arcs_instrument_setups(self):
+        return self.session.query(GMOSMOSInstrumentSetup).join(GMOSMOSRawFITS).join(ObservationType).join(GMOSMask)\
+        .filter(ObservationType.name == 'arc', GMOSMask.name.like('%arcsec')).all()
 
     def __getattr__(self, item):
         if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
@@ -163,15 +179,30 @@ class GMOSMOSProject(BaseProject):
     def link_masks(self):
         """For each MOS observation, link it to the corresponding mask file."""
         for gmos_raw in self.session.query(GMOSMOSRawFITS):
+            slit_mask_pattern = re.compile('G[SN]\d{4}.+')
+            longslit_mask_pattern = re.compile('(\d+)\.(\d+)arcsec')
             if gmos_raw.mask_id is not None:
                 logger.debug('Mask is already set for %s - moving on', 
                              gmos_raw.fits.fname)
                 continue
             mask_name = gmos_raw.fits.header['maskname']
-            if re.match('G[SN]\d{4}.+', mask_name) is None:
-                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname', 
+
+            if longslit_mask_pattern.match(mask_name) is not None:
+
+                if self.session.query(GMOSMask).filter_by(
+                        name=mask_name.strip().lower()).count() == 0:
+                    program_id = self.session.query(base.Program).filter_by(
+                        name=gmos_raw.fits.header['GEMPRGID'].lower().strip()).one().id
+                    longslit_placeholder_mask = GMOSMask(mask_name, program_id)
+                    self.session.add(longslit_placeholder_mask)
+                    self.session.commit()
+
+
+            elif slit_mask_pattern.match(mask_name) is None:
+                logger.warn('%s (in %s) doesn\'t seem to be a valid maskname',
                             mask_name, gmos_raw.fits.fname)
                 continue
+
             masks_found = self.session.query(GMOSMask).filter_by(
                 name=mask_name.strip().lower()).count()
             if masks_found == 0:
@@ -183,15 +214,25 @@ class GMOSMOSProject(BaseProject):
                             ' please check', mask_name)
                 continue
             else:
-                logger.info('Linking %s with mask %s', 
+                logger.info('Linking %s with mask %s',
                             gmos_raw.fits.fname, mask_name)
                 mask = self.session.query(GMOSMask).filter_by(
                     name=mask_name.strip().lower()).one()
                 gmos_raw.mask_id = mask.id
 
+
         self.session.commit()
 
-    def link_science_sets(self):
+    def link_science_sets(self, science_instrument2longslit_instrument, longslit_arc_type='0.5arcsec'):
+        """
+        Linking individual science observations (single fits files) to its calibration data
+
+        Parameters
+        ----------
+
+        science_instrument2longslit_instrument: ~np.recarray
+            a dictionary mapping science_frame instrument_setup_id -> longslit_arc_instrument_setup_id
+        """
 
         science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
             .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
@@ -200,16 +241,40 @@ class GMOSMOSProject(BaseProject):
                 .join(ObservationType).filter(ObservationType.name=='flat',
                                               GMOSMOSRawFITS.mask_id==science_frame.mask_id,
                                               GMOSMOSRawFITS.observation_block_id==science_frame.observation_block_id)\
-                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).all()
+
+            #### WRONG - just picking one flat for now ###
+            flat = flat[0]
 
             mask_arc = self.session.query(GMOSMOSRawFITS)\
                 .join(ObservationType).join(ObservationClass)\
                 .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
                         GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
-                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).all()
 
-            self.session.add(GMOSMOSScienceSet(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id))
-            logger.info('Link Science Frame %s with:\nMask Arc: %s\nFlat: %s\n', science_frame, flat, mask_arc)
+            if len(mask_arc) != 1:
+                logger.warn('Science Frame {0} has more than one mask arc:\n{1} - selecting closest arc'.format(science_frame, '\n'.join(map(str, mask_arc))))
+            mask_arc = mask_arc[0]
+
+            requested_instrument_setup_id = science_instrument2longslit_instrument[science_frame.instrument_setup_id]
+            longslit_arcs = self.session.query(GMOSMOSRawFITS)\
+                .join(ObservationType).join(ObservationClass).join(GMOSMask)\
+                .filter(ObservationType.name=='arc', GMOSMOSRawFITS.instrument_setup_id==requested_instrument_setup_id,
+                        GMOSMask.name==longslit_arc_type)\
+                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).all()
+
+            #taking the longslit arc closest to the observations
+            if len(longslit_arcs) == 0:
+                raise GMOSDBError('Requested longslit_arc is not found')
+
+            longslit_arc = longslit_arcs[0]
+
+            if (longslit_arc.mjd - science_frame.mjd) > 2:
+                logger.warn('The closest arc was taken more than 2 days before/after the current science frame')
+
+            self.session.add(GMOSMOSScienceSet(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id,
+                                               longslit_arc_id=longslit_arc.id))
+            logger.info('Link Science Frame {0} with:\nFlat: {1}\nMask Arc: {2}\nLongslit Arc: {3}\n'.format(science_frame, flat, mask_arc, longslit_arc))
         self.session.commit()
 
 

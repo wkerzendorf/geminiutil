@@ -35,7 +35,12 @@ from sqlalchemy import String, Integer, Float, DateTime, Boolean
 class GMOSMask(Base):
     __tablename__ = 'gmos_mask'
 
-    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
+
+    # GMOSMasks don't have the fits_id as the primary key anymore.
+    #The reason for this change is that for a longslit exposure there exists no mask exposure.
+
+    id = Column(Integer, primary_key=True)
+    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
     name = Column(String)
     program_id = Column(Integer, ForeignKey('program.id'))
 
@@ -51,7 +56,7 @@ class GMOSMask(Base):
         mask_name = fits_object.header['DATALAB'].lower().strip()
         mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
         mask_object = cls(mask_name, mask_program.id)
-        mask_object.id = fits_object.id
+        mask_object.fits_id = fits_object.id
         return mask_object
 
 
@@ -509,7 +514,7 @@ class GMOSMOSRawFITS(Base):
     object = relationship(base.Object, uselist=False, backref='raw_fits')
     mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
 
-    instrument_setup = relationship(GMOSMOSInstrumentSetup)
+    instrument_setup = relationship(GMOSMOSInstrumentSetup, backref='raw_fits')
 
 
     @property
@@ -559,16 +564,17 @@ class GMOSMOSScienceSet(Base):
     id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
     flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
     mask_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
-
-
+    longslit_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
     science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
                             backref=backref('science_frame', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
-                            backref=backref('mask2science', uselist=False))
+                            backref=backref('mask_arc2science', uselist=False))
 
+    longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==longslit_arc_id),
+                            backref=backref('long_arc2science', uselist=False))
 
 
 class GMOSMOSSlice(Base):
@@ -587,6 +593,7 @@ class GMOSMOSSlice(Base):
     def __repr__(self):
         return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
                (self.priority, self.lower_edge, self.upper_edge)
+
 
     @property
     def prepared_science_fits_data(self):
