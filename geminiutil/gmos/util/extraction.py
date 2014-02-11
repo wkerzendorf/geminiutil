@@ -13,6 +13,9 @@ def extract_spectrum(gmos_slice, tracepos=None,
     if tracepos is None:
         tracepos = np.array([gmos_slice.default_trace_position])
 
+    #return scidata, read_noise, tracepos
+
+
     e_source = scidata
     psf = extract.PSF(form=0, guesses=[[0., 0.], 8., (2.5, '@')])
     for i in range(model_errors+1):
@@ -58,4 +61,4 @@ def extract_spectrum(gmos_slice, tracepos=None,
     scitab.meta['nbad'] = [ntbadl, ntbadh]
     scitab.meta['nproblems'] = nproblems
 
-    return scitab, test
+    return scitab

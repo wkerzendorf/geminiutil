@@ -38,6 +38,7 @@ import estimate_disp
 
 
 class GMOSLongslitArc(object):
+
     def __init__(self, line_catalog,
                  xref_grid=np.arange(-40, 40),
                  frac_disp_grid=np.linspace(0.97, 1.03, 31),
