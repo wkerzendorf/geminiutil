@@ -34,7 +34,7 @@ import astropy.units as u
 
 from prepare_frame import multiext_data, multiext_header_value, multiext_x_coords
 from wavecal import LineTable, ThreeChipLineTable
-import estimate_disp
+from estimate_disp import estimate_disp
 
 
 class GMOSLongslitArc(object):
@@ -83,8 +83,8 @@ class GMOSLongslitArc(object):
 
         # extract spectrum from image
         arctab = get_arcs(prepared_arc.fits.fits_data,
-                                 skypol=self.get_arcs_skypol,
-                                 clip=self.get_arcs_clip)
+                          skypol=self.get_arcs_skypol,
+                          clip=self.get_arcs_clip)
         # estimate dispersion and position of reference wavelength
         xref_estimate, disp_estimate, shift, fake \
             = estimate_disp(Table([arctab['x'][:,1], arctab['f'][:,1]]),
