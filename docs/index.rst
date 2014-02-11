@@ -8,5 +8,6 @@ The documentation for `geminiutil`
 
     general
     initializing
+    exploring
 
 
