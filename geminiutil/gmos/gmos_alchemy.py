@@ -553,8 +553,8 @@ class GMOSMOSPrepared(Base):
     #prepare_param_id = Column(Integer)
 
 
-class GMOSMOSScience(Base):
-    __tablename__ = 'gmos_mos_science'
+class GMOSMOSScienceSet(Base):
+    __tablename__ = 'gmos_mos_science_set'
 
     id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
     flat_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
@@ -562,14 +562,12 @@ class GMOSMOSScience(Base):
 
 
 
-    raw_fits = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
+    science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
                             backref=backref('science_frame', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
                             backref=backref('mask2science', uselist=False))
-
-
 
 
 
@@ -580,17 +578,50 @@ class GMOSMOSSlice(Base):
     list_id = Column(Integer)
     object_id = Column(Integer)
     priority = Column(Integer)
-    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science.id'))
+    slice_set_id = Column(Integer, ForeignKey('gmos_mos_science_set.id'))
     lower_edge = Column(Float)
     upper_edge = Column(Float)
 
-    science_frame = relationship(GMOSMOSScience, backref='slices')
+    science_set = relationship(GMOSMOSScienceSet, backref='slices')
 
     def __repr__(self):
         return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
                (self.priority, self.lower_edge, self.upper_edge)
 
+    @property
+    def prepared_science_fits_data(self):
+        return self.science_set.science.prepared_fits.fits.fits_data
+
+    @property
+    def science_instrument_setup(self):
+        return self.science_set.science.instrument_setup
+
+    @property
+    def default_trace_position(self):
+        spec_pos_y = self.science_set.science.mask.table[self.list_id]['specpos_y'].astype(np.float64)
+        return spec_pos_y / self.science_instrument_setup.y_binning
+
+    def get_prepared_science_data(self):
+        fits_data = self.prepared_science_fits_data
+        science_slice = slice(np.ceil(self.lower_edge).astype(int), np.ceil(self.upper_edge).astype(int))
+        science_slice_data = [fits_data[chip].data[science_slice, :] for chip in xrange(1, 4)]
+
+        return science_slice_data
+
+    def get_read_noises(self):
+        return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
 
+class GMOSMOSSliceWaveCal(Base):
+    __tablename__ = 'gmos_mos_slice_wavecal'
+
+    id = Column(Integer, primary_key=True)
+    slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
+    wave_cal_type_id = Column(Integer, ForeignKey('wave_cal_type.id'))
+    raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    list_id = Column(Integer)
+    model = Column(String)
+
+    slice = relationship(GMOSMOSSlice, backref='slice_wavecal')
 
 

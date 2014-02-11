@@ -1,7 +1,7 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScience
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet
 import logging
 from sqlalchemy import func
 
@@ -62,8 +62,8 @@ class GMOSMOSProject(BaseProject):
         return zip(*self.session.query(base.ObservationType.name).all())[0]
 
     @property
-    def science_frames(self):
-        return self.session.query(GMOSMOSScience).all()
+    def science_sets(self):
+        return self.session.query(GMOSMOSScienceSet).all()
 
     def __getattr__(self, item):
         if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
@@ -191,7 +191,7 @@ class GMOSMOSProject(BaseProject):
 
         self.session.commit()
 
-    def link_science_frames(self):
+    def link_science_sets(self):
 
         science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
             .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
@@ -208,7 +208,7 @@ class GMOSMOSProject(BaseProject):
                         GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
                 .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).first()
 
-            self.session.add(GMOSMOSScience(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id))
+            self.session.add(GMOSMOSScienceSet(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id))
             logger.info('Link Science Frame %s with:\nMask Arc: %s\nFlat: %s\n', science_frame, flat, mask_arc)
         self.session.commit()
 

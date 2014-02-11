@@ -9,45 +9,119 @@ outfits = Prep(infits)
 Ensure the out fits headers contain everything required to reproduce the result
 """
 
-from .basic import prepare
+from geminiutil.base import FITSFile
+from geminiutil.gmos.util import prepare_frame, prepare_slices
+from geminiutil.gmos import GMOSMOSPrepared
+import logging
+logger = logging.getLogger(__name__)
+from sqlalchemy.orm import object_session
+import os
 
+class GMOSPrepareFrame(object):  # will be base when we know what
+    __tablename__ = 'gmos_prepare'
 
-class Prepare(object):
+    file_prefix = 'prep'
+
     def __init__(self, bias_subslice=[slice(None), slice(1,11)],
-                 data_subslice=[slice(None), slice(-1)], clip=3.,
-                 gain=None, read_noise=None, combine=True,
-                 overscan_std_threshold=3.):
-        """Class that extracts and combines bias- and gain-corrected extensions
+            data_subslice=None, bias_clip_sigma=3.,
+            gain=None, read_noise=None, combine=True,
+            overscan_std_threshold=3.):
 
-        Wrapper around function ~basic.prepare.prepare
-
-        Returns
-        -------
-        Class instance which can be applied to input fits files, using call
-        method (which calls functions correct_overscan, correct_gain, and
-        combine_halves with parameters set here)
-
-        Examples
-        --------
-        PrepDA = gmos_basics.Prepare(data_subslice=[slice(72,172),slice(-1)])
-        dayarc = PrepDA(fits.open('N20120423S0019.fits'))
-        """
         self.bias_subslice = bias_subslice
         self.data_subslice = data_subslice
-        self.clip = clip
         self.gain = gain
+        self.bias_clip_sigma = bias_clip_sigma
         self.read_noise = read_noise
         self.combine = combine
         self.overscan_std_threshold = overscan_std_threshold
 
-    def __call__(self, image):
-        """Measure bias from overscan, correct for gain, combine halves.
-
-        Notes
-        -----
-        calls ~basic.prepare.prepare
+    def __call__(self, gmos_raw_object, fname=None, destination_dir='.'):
         """
-        return prepare.prepare(image, self.bias_subslice,
-                               self.data_subslice, self.clip, self.gain,
-                               self.read_noise, self.combine,
-                               self.overscan_std_threshold)
+        Preparing the Image
+
+        Parameters
+        ----------
+
+        gmos_raw_object :
+
+        fname :
+            output filename
+
+        write_steps :
+            write out the individual steps to the individual fits files
+
+        write_cut_image :
+            fits file name to write out the cut_image to
+
+
+
+        """
+
+        if fname is None:
+            fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
+
+        full_path = os.path.join(destination_dir, fname)
+
+        fits_data = gmos_raw_object.fits.fits_data
+
+        assert len(fits_data) - 1 == 3
+
+        # subtract overscan, get useful part of detector, correct for gain,
+        # and set read noise
+        if self.read_noise is None:
+            read_noise = [detector.readout_noise for detector in
+                          gmos_raw_object.instrument_setup.detectors]
+        else:
+            read_noise = self.read_noise
+
+        if self.gain is None:
+            gain = [detector.gain for detector in
+                    gmos_raw_object.instrument_setup.detectors]
+        else:
+            gain = self.gain
+
+
+        fits_file = prepare_frame.prepare(fits_data,
+                                    bias_subslice=self.bias_subslice,
+                                    data_subslice=self.data_subslice,
+                                    clip=self.bias_clip_sigma,
+                                    gain=gain, read_noise=read_noise, combine=self.combine,
+                                    overscan_std_threshold=self.overscan_std_threshold)
+        # give each extension a name.  May later add error/mask extensions
+        for i, extension in enumerate(fits_file):
+            if i > 0:
+                extension.name = 'chip{0:d}.data'.format(i)
+
+        fits_file.writeto(full_path, clobber=True)
+
+        # read it back in and add to database
+        fits_file = FITSFile.from_fits_file(full_path)
+
+        session = object_session(gmos_raw_object)
+        session.add(fits_file)
+        session.commit()
+        gmos_mos_prepared = GMOSMOSPrepared(id=fits_file.id,
+                                            raw_fits_id=gmos_raw_object.id)
+        session.add(gmos_mos_prepared)
+        session.commit()
+        return gmos_mos_prepared
+
+
+
+class GMOSPrepareScienceSet(object):
+    def __init__(self, prepare_function):
+        self.prepare = prepare_function
+
+    def __call__(self, science_set, destination_dir='.'):
+
+        for item in ['science', 'flat', 'mask_arc']:
+            current_frame = getattr(science_set, item)
+            if current_frame.prepared_fits is not None:
+                logger.warn('Prepared fits already exists for %s -- skipping', current_frame)
+            else:
+                prepared_fits = self.prepare(current_frame, destination_dir=destination_dir)
+
+        slices = prepare_slices.calculate_slice_geometries(science_set)
+        session = object_session(science_set)
+        session.add_all(slices)
+        session.commit()
