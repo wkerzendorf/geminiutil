@@ -16,7 +16,7 @@ Initializing Database
 
 First time, initialize to read in GMOS filter/grating information
 
->>> proj.initialize()
+>>> proj.initialize_database()
 
 Adding Data to the DB
 ^^^^^^^^^^^^^^^^^^^^^
