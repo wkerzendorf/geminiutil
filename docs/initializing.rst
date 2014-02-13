@@ -39,7 +39,27 @@ well, however, these do not have corresponding files. Currently we only support 
 Grouping Science Sets
 ^^^^^^^^^^^^^^^^^^^^^
 
-Science sets are a way to group each individual science observation with its calibration data
+Science sets are a way to group each individual science observation with its calibration data. For this to work the function
+must be given a dictionary linking science instrument setups to longslit arc instrument setups
+first look at the science instrument_setups
 
->>> proj.link_science_sets()
+>>> proj.science_instrument_setups
+[<GMOS MOS Instrument Setup ID=11 Filter1 open Filter2 open Grating B600+_G5323 Tilt 56.82 central wave=430.00 nm>,
+ <GMOS MOS Instrument Setup ID=12 Filter1 open Filter2 open Grating B600+_G5323 Tilt 56.05 central wave=470.00 nm>,
+ <GMOS MOS Instrument Setup ID=13 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 55.67 central wave=735.00 nm>,
+ <GMOS MOS Instrument Setup ID=14 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 55.15 central wave=775.00 nm>]
+
+>>> proj.longslit_arcs_instrument_setups
+Out[3]:
+[<GMOS MOS Instrument Setup ID=17 Filter1 open Filter2 open Grating B600+_G5323 Tilt 56.43 central wave=450.00 nm>,
+ <GMOS MOS Instrument Setup ID=25 Filter1 open Filter2 open Grating B600+_G5323 Tilt 57.20 central wave=410.00 nm>,
+ <GMOS MOS Instrument Setup ID=26 Filter1 open Filter2 open Grating B600+_G5323 Tilt 55.67 central wave=490.00 nm>,
+ <GMOS MOS Instrument Setup ID=16 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 55.41 central wave=755.00 nm>,
+ <GMOS MOS Instrument Setup ID=27 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 56.05 central wave=705.00 nm>,
+ <GMOS MOS Instrument Setup ID=30 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 0.00 central wave=755.00 nm>,
+ <GMOS MOS Instrument Setup ID=28 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 55.92 central wave=715.00 nm>,
+ <GMOS MOS Instrument Setup ID=29 Filter1 OG515_G0330 Filter2 open Grating R400+_G5325 Tilt 54.90 central wave=795.00 nm>]
+
+>>> proj.link_science_sets({11:17, 12:17, 13:16, 14:16}
+)
 
