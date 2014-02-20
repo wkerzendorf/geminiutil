@@ -681,6 +681,16 @@ class GMOSMOSSlice(Base):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
 
+class GMOSLongSlitArc(Base):
+    __tablename__ = 'gmos_longslit_arc'
+
+    id = Column()
+
+class GMOSArcLamp(Base):
+    __tablename__ = 'gmos_arclamp'
+
+
+
 class GMOSMOSSliceWaveCal(Base):
     __tablename__ = 'gmos_mos_slice_wavecal'
 

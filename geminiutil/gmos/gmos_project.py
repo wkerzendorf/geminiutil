@@ -223,6 +223,11 @@ class GMOSMOSProject(BaseProject):
 
         self.session.commit()
 
+    def link_longslit_arcs(self):
+        for longslit_arc in self.arc_query.join(GMOSMask).filter(GMOSMask.name.like('%arcsec')).all():
+            print longslit_arc
+
+
     def link_science_sets(self, science_instrument2longslit_instrument, longslit_arc_type='0.5arcsec'):
         """
         Linking individual science observations (single fits files) to its calibration data
@@ -337,7 +342,10 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
+    def prepare_science_sets(self, force=False):
+        """
+            prepare all science required data
+        """
 
-
-
-
+        if force:
+            raise ValueError('currently force is not supported')

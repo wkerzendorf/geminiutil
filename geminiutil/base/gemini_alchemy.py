@@ -274,30 +274,6 @@ class WaveCalType(Base):
     description = Column(String, default=None)
 
 
-"""
-class GeminiRawFITS(object):
-    __tablename__ = 'raw_fits_file'
-
-
-
-
-
-
-
-    def __init__(self, date_obs, instrument_id, observation_block_id, observation_class_id, observation_type_id, exclude=False):
-        self.date_obs = date_obs
-        self.instrument_id = instrument_id
-        self.observation_block_id = observation_block_id
-        self.observation_class_id = observation_class_id
-        self.observation_type_id = observation_type_id
-        self.exclude = exclude
-
-    def __repr__(self):
-        return "<raw FITS - Instrument %s Block %s Class %s Type %s>" % (self.instrument.name, self.observation_block.name,
-                                    self.observation_class.name, self.observation_type.name)
-
-"""
-
 
 
 
