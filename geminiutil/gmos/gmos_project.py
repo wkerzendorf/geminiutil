@@ -1,7 +1,7 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp
 import logging
 from sqlalchemy import func
 
@@ -289,26 +289,36 @@ class GMOSMOSProject(BaseProject):
         if configuration_dir is None:
             configuration_dir = default_configuration_dir
 
+        self._initialize_gmos_filters(configuration_dir)
+        self._initialize_gmos_arcs(configuration_dir)
+
+    def _initialize_gmos_arcs(self, configuration_dir=None):
+        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat', path=os.path.join(configuration_dir, 'arcs'))
+        self.session.add(cuar_arc)
+        self.session.commit()
+
+    def _initialize_gmos_filters(self, configuration_dir):
+
         logger.info('Reading Filter information')
 
         gmos_filters = np.recfromtxt(
             os.path.join(configuration_dir, 'GMOSfilters.dat'),
             names=['name', 'wave_start', 'wave_end', 'fname'])
         for line in gmos_filters:
-            new_filter = GMOSFilter(name=line['name'], 
+            new_filter = GMOSFilter(name=line['name'],
                                     wavelength_start_value=line['wave_start'],
-                                    wavelength_start_unit='nm', 
+                                    wavelength_start_unit='nm',
                                     wavelength_end_value=line['wave_end'],
-                                    wavelength_end_unit='nm', 
+                                    wavelength_end_unit='nm',
                                     fname=line['fname'],
-                                    path=os.path.join(configuration_dir, 
+                                    path=os.path.join(configuration_dir,
                                                       'filter_data'))
             self.session.add(new_filter)
 
         open_filter = GMOSFilter(name='open', wavelength_start_value=0,
-                                 wavelength_start_unit='nm', 
+                                 wavelength_start_unit='nm',
                                  wavelength_end_value=np.inf,
-                                 wavelength_end_unit='nm', 
+                                 wavelength_end_unit='nm',
                                  fname=None, path=None)
         self.session.add(open_filter)
 
@@ -319,28 +329,27 @@ class GMOSMOSProject(BaseProject):
         logger.info('Reading grating information')
         for line in gmos_gratings:
             new_grating = GMOSGrating(
-                name=line['name'], 
+                name=line['name'],
                 ruling_density_value=line['ruling_density'],
-                blaze_wavelength_value=line['blaze_wave'], 
+                blaze_wavelength_value=line['blaze_wave'],
                 R=line['R'],
-                coverage_value=line['coverage'], 
+                coverage_value=line['coverage'],
                 wavelength_start_value=line['wave_start'],
                 wavelength_end_value=line['wave_end'],
-                wavelength_offset_value=line['wave_offset'], 
+                wavelength_offset_value=line['wave_offset'],
                 y_offset_value=line['y_offset'])
             self.session.add(new_grating)
 
-        mirror = GMOSGrating(name='mirror', 
+        mirror = GMOSGrating(name='mirror',
                              ruling_density_value=0.0,
                              blaze_wavelength_value=0.0, R=0.0,
-                             coverage_value=np.inf, 
+                             coverage_value=np.inf,
                              wavelength_start_value=0.0,
                              wavelength_end_value=np.inf,
-                             wavelength_offset_value=0.0, 
+                             wavelength_offset_value=0.0,
                              y_offset_value=0.0)
         self.session.add(mirror)
         self.session.commit()
-
 
     def prepare_science_sets(self, force=False):
         """

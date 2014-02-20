@@ -684,10 +684,24 @@ class GMOSMOSSlice(Base):
 class GMOSLongSlitArc(Base):
     __tablename__ = 'gmos_longslit_arc'
 
-    id = Column()
+    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
+    arc_lamp_id = Column(Integer, ForeignKey('gmos_arc_lamp.id'))
+
+
 
 class GMOSArcLamp(Base):
-    __tablename__ = 'gmos_arclamp'
+    __tablename__ = 'gmos_arc_lamp'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+    line_list_fname = Column(String)
+    line_list_path = Column(String)
+
+
+    @property
+    def line_list_fullpath(self):
+        return os.path.join(self.line_list_path, self.line_list_fname)
 
 
 
