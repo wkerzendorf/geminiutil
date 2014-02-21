@@ -1,4 +1,5 @@
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
+from sqlalchemy import event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, relationship, backref, object_session
@@ -27,6 +28,10 @@ def hashfile(afile, hasher, blocksize=65536):
     return hasher.hexdigest()
 
 Base = declarative_base()
+
+
+
+
 
 class CategoryBaseClass(object):
     category_keyword = None
@@ -109,6 +114,15 @@ class FITSFile(Base):
         self.size = size
         self.md5 = md5
         self.extensions = extensions
+
+    def __repr__(self):
+        return "<FITS file ID {0:d} @ {1}>".format(self.id, self.full_path)
+
+# standard decorator style
+@event.listens_for(FITSFile, 'before_delete')
+def receive_before_delete(mapper, connection, target):
+    logger.info('Deleting FITS file {0}'.format(target.full_path))
+    os.remove(target.full_path)
 
 
 class Program(Base, CategoryBaseClass):

@@ -9,13 +9,11 @@ outfits = Prep(infits)
 Ensure the out fits headers contain everything required to reproduce the result
 """
 
-from geminiutil.base import FITSFile
-from geminiutil.gmos.util import prepare_frame, prepare_slices
-from geminiutil.gmos import GMOSMOSPrepared
+from geminiutil.gmos.util import prepare_frame#, prepare_slices
+
 import logging
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import object_session
-import os
 
 class GMOSPrepareFrame(object):  # will be base when we know what
     __tablename__ = 'gmos_prepare'
@@ -35,7 +33,7 @@ class GMOSPrepareFrame(object):  # will be base when we know what
         self.combine = combine
         self.overscan_std_threshold = overscan_std_threshold
 
-    def __call__(self, gmos_raw_object, fname=None, destination_dir='.'):
+    def __call__(self, gmos_raw_object):
         """
         Preparing the Image
 
@@ -57,10 +55,6 @@ class GMOSPrepareFrame(object):  # will be base when we know what
 
         """
 
-        if fname is None:
-            fname = '%s-%s' % (self.file_prefix, gmos_raw_object.fits.fname)
-
-        full_path = os.path.join(destination_dir, fname)
 
         fits_data = gmos_raw_object.fits.fits_data
 
@@ -92,19 +86,9 @@ class GMOSPrepareFrame(object):  # will be base when we know what
             if i > 0:
                 extension.name = 'chip{0:d}.data'.format(i)
 
-        fits_file.writeto(full_path, clobber=True)
+        return fits_file
 
-        # read it back in and add to database
-        fits_file = FITSFile.from_fits_file(full_path)
 
-        session = object_session(gmos_raw_object)
-        session.add(fits_file)
-        session.commit()
-        gmos_mos_prepared = GMOSMOSPrepared(id=fits_file.id,
-                                            raw_fits_id=gmos_raw_object.id)
-        session.add(gmos_mos_prepared)
-        session.commit()
-        return gmos_mos_prepared
 
 
 

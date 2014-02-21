@@ -19,6 +19,10 @@ from astropy import time
 
 import numpy as np
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
 
@@ -31,6 +35,11 @@ import numpy as np
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
+
+from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
+
+class GMOSDatabaseDuplicate(Exception):
+    pass
 
 class GMOSMask(Base):
     __tablename__ = 'gmos_mask'
@@ -543,8 +552,59 @@ class GMOSMOSRawFITS(Base):
         self.object_id = object_id
         self.instrument_setup_id = instrument_setup_id
     def __repr__(self):
-        return '<gmos fits="%s" class="%s" type="%s" object="%s">' % (self.fits.fname, self.observation_class.name,
-                                                                  self.observation_type.name, self.object.name)
+        return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'.format(self.id,
+                                                                                        self.fits.fname,
+                                                                                        self.observation_class.name,
+                                                                                        self.observation_type.name,
+                                                                                        self.object.name)
+
+    def prepare_to_database(self, prepare_function=None, destination_dir='.', force=False):
+
+        session = object_session(self)
+
+        if self.prepared is not None:
+            if not force:
+                raise GMOSDatabaseDuplicate('This fits has already been prepared {0}. '
+                                            'Use force=True to override'.format(self.prepared))
+            else:
+                session.delete(self.prepared)
+                session.commit()
+
+        if prepare_function is None:
+            logger.debug('no prepare function given - using defaults')
+            prepare_function = GMOSPrepareFrame()
+        prepared_fits = self.prepare(prepare_function=prepare_function)
+
+        prepared_fname = '{0}-{1}'.format(prepare_function.file_prefix, self.fits.fname)
+
+        prepared_full_path = os.path.join(destination_dir, prepared_fname)
+
+        prepared_fits.writeto(prepared_full_path, clobber=True)
+
+        # read it back in and add to database
+        fits_file = FITSFile.from_fits_file(prepared_full_path)
+
+
+        session.add(fits_file)
+        session.commit()
+
+        gmos_mos_prepared = GMOSMOSPrepared(id=fits_file.id,
+                                            raw_fits_id=self.id)
+        session.add(gmos_mos_prepared)
+        session.commit()
+
+        return gmos_mos_prepared
+
+    def prepare(self, prepare_function=None):
+        if prepare_function is None:
+            logger.debug('no prepare function given - using defaults')
+            prepare_function = GMOSPrepareFrame()
+
+        prepared_fits = prepare_function(self)
+        return prepared_fits
+
+
+
 
 
 class GMOSMOSPrepared(Base):
@@ -553,10 +613,12 @@ class GMOSMOSPrepared(Base):
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
     raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
-    raw_fits = relationship(GMOSMOSRawFITS, backref=backref('prepared_fits', uselist=False), uselist=False)
-    fits = relationship(FITSFile, uselist=False)
+    raw_fits = relationship(GMOSMOSRawFITS, backref=backref('prepared', uselist=False), uselist=False)
+    fits = relationship(FITSFile, uselist=False, cascade='delete')
     #prepare_param_id = Column(Integer)
 
+    def __repr__(self):
+        return "<Prepared version of raw fits {0}>".format(self.raw_fits)
 
 class GMOSMOSScienceSet(Base):
     __tablename__ = 'gmos_mos_science_set'
@@ -597,7 +659,7 @@ class GMOSMOSSlice(Base):
 
     @property
     def prepared_science_fits_data(self):
-        return self.science_set.science.prepared_fits.fits.fits_data
+        return self.science_set.science.prepared.fits.fits_data
 
     @property
     def science_instrument_setup(self):
