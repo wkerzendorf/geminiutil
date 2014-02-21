@@ -494,8 +494,6 @@ class GMOSMOSInstrumentSetup(Base):
             81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
         return spectral_pixel_scale_value * units.Unit('nm/pix')
 
-
-
     def __repr__(self):
         return "<GMOS MOS Instrument Setup ID=%s Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
                 (self.id, self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
@@ -709,6 +707,9 @@ class GMOSArcLamp(Base):
 
         return table.Table(line_list)
 
+    def __repr__(self):
+        return "<GMOS Arc Lamp {0}>".format(self.name)
+
 
 class GMOSLongSlitArc(Base):
     __tablename__ = 'gmos_longslit_arc'
@@ -725,13 +726,27 @@ class GMOSLongSlitArc(Base):
         if gmos_longslit_calibration is None:
             gmos_longslit_calibration = GMOSLongslitArcCalibration(self.arc_lamp.read_line_list())
 
-        if self.prepared_fits is None:
-            raise
+        if self.prepared is None:
+            raise GMOSNotPreparedError("This Longslit arc has not been prepared")
+
+
         return gmos_longslit_calibration(self.prepared)
 
     @property
-    def prepared_fits(self):
-        return self.raw.prepared_fits
+    def prepared(self):
+        return self.raw.prepared
+
+    def __repr__(self):
+        instrument_setup = self.raw.instrument_setup
+        return '<GMOS long slit arc "{0}" Slit {1} Filter1 {2} Filter2 {3} Grating {4} Tilt {5}' \
+               'central wave={6:.2f} {7}>'.format(self.fits.fname,
+                                                  self.raw.mask.name,
+                                               instrument_setup.filter1,
+                                               instrument_setup.filter2,
+                                               instrument_setup.grating,
+                                               instrument_setup.grating_tilt_value,
+                                               instrument_setup.grating_central_wavelength_value,
+                                               instrument_setup.grating_central_wavelength_unit)
 
 
 
