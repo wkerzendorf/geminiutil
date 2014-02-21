@@ -1,7 +1,7 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
 import logging
 from sqlalchemy import func
 
@@ -224,8 +224,14 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
     def link_longslit_arcs(self):
+        logger.info('Linking Longslit Arcs')
+
         for longslit_arc in self.arc_query.join(GMOSMask).filter(GMOSMask.name.like('%arcsec')).all():
-            print longslit_arc
+            current_arc_lamp = self.session.query(GMOSArcLamp).filter_by(name=longslit_arc.fits.header['GCALLAMP'].lower()).one()
+            gmos_longslit_arc = GMOSLongSlitArc(id=longslit_arc.id, arc_lamp_id=current_arc_lamp.id)
+            self.session.add(gmos_longslit_arc)
+
+        self.session.commit()
 
 
     def link_science_sets(self, science_instrument2longslit_instrument, longslit_arc_type='0.5arcsec'):
@@ -290,9 +296,12 @@ class GMOSMOSProject(BaseProject):
             configuration_dir = default_configuration_dir
 
         self._initialize_gmos_filters(configuration_dir)
+        self._initialize_gmos_gratings(configuration_dir)
         self._initialize_gmos_arcs(configuration_dir)
 
     def _initialize_gmos_arcs(self, configuration_dir=None):
+
+        logger.info('Reading Arc information')
         cuar_arc = GMOSArcLamp(name='cuar', line_list_fname='CuAr.dat', line_list_path=os.path.join(configuration_dir, 'arcs'))
         self.session.add(cuar_arc)
         self.session.commit()
@@ -322,6 +331,7 @@ class GMOSMOSProject(BaseProject):
                                  fname=None, path=None)
         self.session.add(open_filter)
 
+    def _initialize_gmos_gratings(self, configuration_dir):
         gmos_gratings = np.recfromtxt(
             os.path.join(configuration_dir, 'GMOSgratings.dat'),
             names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',

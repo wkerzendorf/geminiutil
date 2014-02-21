@@ -15,11 +15,13 @@ from sqlalchemy import func
 from astropy.utils import misc
 from astropy import units
 
-from astropy import time
+from astropy import time, table
 
 import numpy as np
 
 import logging
+
+from geminiutil.gmos.util.longslit_arc import GMOSLongslitArcCalibration
 
 logger = logging.getLogger(__name__)
 
@@ -680,15 +682,6 @@ class GMOSMOSSlice(Base):
     def get_read_noises(self):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
-
-class GMOSLongSlitArc(Base):
-    __tablename__ = 'gmos_longslit_arc'
-
-    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
-    arc_lamp_id = Column(Integer, ForeignKey('gmos_arc_lamp.id'))
-
-
-
 class GMOSArcLamp(Base):
     __tablename__ = 'gmos_arc_lamp'
 
@@ -699,9 +692,37 @@ class GMOSArcLamp(Base):
     line_list_path = Column(String)
 
 
+
+
     @property
     def line_list_fullpath(self):
         return os.path.join(self.line_list_path, self.line_list_fname)
+
+    def read_line_list(self):
+        line_list = np.genfromtxt(self.line_list_fullpath,
+                                  dtype=[('w','f8'), ('ion','a7'), ('strength','i4')],
+                                  delimiter=[9, 7, 8])
+
+        return table.Table(line_list)
+
+
+class GMOSLongSlitArc(Base):
+    __tablename__ = 'gmos_longslit_arc'
+
+    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
+    arc_lamp_id = Column(Integer, ForeignKey('gmos_arc_lamp.id'))
+
+
+    arc_lamp = relationship(GMOSArcLamp, uselist=False, backref='arcs')
+    raw = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id))
+
+
+    def calibrate(self, gmos_longslit_calibration=None):
+        if gmos_longslit_calibration is None:
+            gmos_longslit_calibration = GMOSLongslitArcCalibration(self.arc_lamp.read_line_list())
+
+        return gmos_longslit_calibration(self.prepared)
+
 
 
 

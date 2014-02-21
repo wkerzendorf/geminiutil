@@ -37,7 +37,7 @@ from wavecal import LineTable, ThreeChipLineTable
 from estimate_disp import estimate_disp
 
 
-class GMOSLongslitArc(object):
+class GMOSLongslitArcCalibration(object):
 
     def __init__(self, line_catalog,
                  xref_grid=np.arange(-40, 40),
