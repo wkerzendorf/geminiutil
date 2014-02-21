@@ -44,7 +44,8 @@ class GMOSLongslitArcCalibration(object):
                  frac_disp_grid=np.linspace(0.97, 1.03, 31),
                  min_curvature=[5.,3.,2.],
                  minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
-                 minlist2=[(2.,0.), (0.26,0.), (0.1,0.)]):
+                 minlist2=[(2.,0.), (0.26,0.), (0.1,0.)],
+                 data_slice=slice(1150, 1250)):
         try:  # is this a quantity with a unit of length?
             line_catalog.to(u.m)
         except:  # convert to angstrom
@@ -59,6 +60,7 @@ class GMOSLongslitArcCalibration(object):
         # for if one really needs to twiddle
         self.get_arcs_skypol = 2
         self.get_arcs_clip = 3.
+        self.data_slice = data_slice
 
     def __call__(self, prepared_arc, doplot=False):
         """Find wavelength solution.
@@ -85,6 +87,7 @@ class GMOSLongslitArcCalibration(object):
         arctab = get_arcs(prepared_arc.fits.fits_data,
                           skypol=self.get_arcs_skypol,
                           clip=self.get_arcs_clip)
+
         # estimate dispersion and position of reference wavelength
         xref_estimate, disp_estimate, shift, fake \
             = estimate_disp(Table([arctab['x'][:,1], arctab['f'][:,1]]),
@@ -131,8 +134,11 @@ def get_arcs(image, skypol=2, clip=3, fferr=0.015):
     Table with columns 'x' (positions on exposed part of CCD) and
     extracted fluxes 'f' (with dimension equal to number of extensions)
     """
+
     data = multiext_data(image)
+
     ron = multiext_header_value(image, 'RDNOISE')
+
     arc, chi2, _, ntbadl, ntbadh = extract.fitsky(data, ron=ron, skypol=skypol,
                                                   clip=clip, fferr=0.015,
                                                   ibadlimit=7)
