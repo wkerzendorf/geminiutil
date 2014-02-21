@@ -43,6 +43,10 @@ from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 class GMOSDatabaseDuplicate(Exception):
     pass
 
+class GMOSNotPreparedError(Exception):
+    #raised if a prepared fits is needed but none found for certain tasks
+    pass
+
 class GMOSMask(Base):
     __tablename__ = 'gmos_mask'
 
@@ -501,7 +505,6 @@ class GMOSMOSInstrumentSetup(Base):
 class GMOSMOSRawFITS(Base):
     __tablename__ = 'gmos_mos_raw_fits'
 
-
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
     mjd = Column(Float)
     instrument_id = Column(Integer, ForeignKey('instrument.id'))
@@ -553,6 +556,7 @@ class GMOSMOSRawFITS(Base):
         self.mask_id = mask_id
         self.object_id = object_id
         self.instrument_setup_id = instrument_setup_id
+
     def __repr__(self):
         return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'.format(self.id,
                                                                                         self.fits.fname,
@@ -721,8 +725,13 @@ class GMOSLongSlitArc(Base):
         if gmos_longslit_calibration is None:
             gmos_longslit_calibration = GMOSLongslitArcCalibration(self.arc_lamp.read_line_list())
 
+        if self.prepared_fits is None:
+            raise
         return gmos_longslit_calibration(self.prepared)
 
+    @property
+    def prepared_fits(self):
+        return self.raw.prepared_fits
 
 
 
