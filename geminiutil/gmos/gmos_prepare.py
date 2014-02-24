@@ -89,23 +89,3 @@ class GMOSPrepareFrame(object):  # will be base when we know what
         return fits_file
 
 
-
-
-
-class GMOSPrepareScienceSet(object):
-    def __init__(self, prepare_function):
-        self.prepare = prepare_function
-
-    def __call__(self, science_set, destination_dir='.'):
-
-        for item in ['science', 'flat', 'mask_arc']:
-            current_frame = getattr(science_set, item)
-            if current_frame.prepared_fits is not None:
-                logger.warn('Prepared fits already exists for %s -- skipping', current_frame)
-            else:
-                prepared_fits = self.prepare(current_frame, destination_dir=destination_dir)
-
-        slices = prepare_slices.calculate_slice_geometries(science_set)
-        session = object_session(science_set)
-        session.add_all(slices)
-        session.commit()

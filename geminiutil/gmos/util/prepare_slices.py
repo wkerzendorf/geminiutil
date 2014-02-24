@@ -1,7 +1,7 @@
 import numpy as np
 from astropy import units, table
 from scipy import ndimage
-from geminiutil.gmos.gmos_alchemy import GMOSMOSSlice
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,4 +58,9 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
 
     rms_slice = slice(rms_space.argmin()-5, rms_space.argmin()+5)
     a, b, c = np.polyfit(pixel_shifts[rms_slice], rms_space[rms_slice], 2)
-    fitted_shift = -b/(2*a)
+    fitted_shift = -b / (2 * a)
+
+    mdf_table['slice_lower_edge'] = slice_lower_edge + fitted_shift
+    mdf_table['slice_upper_edge'] = slice_upper_edge + fitted_shift
+
+    return mdf_table

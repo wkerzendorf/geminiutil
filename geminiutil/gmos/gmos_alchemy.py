@@ -39,6 +39,7 @@ import numpy as np
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
 from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
+from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
 
 class GMOSDatabaseDuplicate(Exception):
     pass
@@ -608,10 +609,6 @@ class GMOSMOSRawFITS(Base):
         prepared_fits = prepare_function(self)
         return prepared_fits
 
-
-
-
-
 class GMOSMOSPrepared(Base):
     __tablename__ = 'gmos_mos_prepared'
 
@@ -642,6 +639,38 @@ class GMOSMOSScienceSet(Base):
 
     longslit_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==longslit_arc_id),
                             backref=backref('long_arc2science', uselist=False))
+
+
+
+
+    def calculate_slice_geometries(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5):
+
+        return calculate_slice_geometries(self, shift_bounds=shift_bounds,
+                                          shift_samples=shift_samples,
+                                          fit_sample=fit_sample)
+
+
+    def calculate_slice_geometries_to_database(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5, force=False):
+        session = object_session(self)
+        if session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).count() > 0:
+            if not force:
+                raise GMOSDatabaseDuplicate('A slice set has already been created for this Science Set. To recalculate'
+                                        ' and delete the existing slice set use force=True')
+            else:
+                logger.warn('Deleting existing slice set and recreating new one')
+                session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
+
+        mdf_table = calculate_slice_geometries(self, shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
+        slices = []
+        for i, line in enumerate(mdf_table):
+            slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
+                                slice_set_id=self.id, lower_edge=line['slice_lower_edge'],
+                                upper_edge=line['slice_upper_edge']))
+
+        session.add_all(slices)
+        session.commit()
+
+        return slices
 
 
 class GMOSMOSSlice(Base):
