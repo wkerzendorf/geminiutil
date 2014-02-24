@@ -39,8 +39,10 @@ Assumes arctab is Table with extracted spectrum in ['x'], ['f'][:,(0,1,2)]
 """
 
 from __future__ import print_function, division
+from copy import deepcopy
 import numpy as np
 from numpy.polynomial.polynomial import Polynomial
+from astropy.extern import six
 from astropy.table import Table
 from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import leastsq
@@ -262,7 +264,9 @@ class LineTable(Table):
 
     def write(self, *args, **kwargs):
         """Write to disk, using Table writer.  Can be restored with .read"""
-        return Table.write(self.filled(), *args, **kwargs)
+        data = [col.filled(None) for col in six.itervalues(self.columns)]
+        filled_table = Table(data=data, meta=deepcopy(self.meta))
+        return Table.write(filled_table, *args, **kwargs)
 
 
 class ThreeChipLineTable(LineTable):
