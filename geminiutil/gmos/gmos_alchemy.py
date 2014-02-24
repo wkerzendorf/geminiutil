@@ -8,6 +8,7 @@ from .. import base
 
 from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
+from sqlalchemy import event
 
 from sqlalchemy.orm import relationship, backref, object_session
 from sqlalchemy import func
@@ -747,6 +748,8 @@ class GMOSLongSlitArc(Base):
 
         return gmos_long_slit_arc_calibration(self.prepared, doplot=doplot)
 
+
+
     def longslit_calibrate_to_database(self, gmos_long_slit_arc_calibration=None, destination_dir='.', force=False):
 
         session = object_session(self)
@@ -764,7 +767,20 @@ class GMOSLongSlitArc(Base):
         wavecal_store_fname = 'arccal-{}.h5'.format(self.raw.fits.fname.replace('.fits',''))
         wavecal_store_full_path = os.path.join(destination_dir, wavecal_store_fname)
         arctab.write(wavecal_store_full_path, path='arc', overwrite=True, format='hdf5')
-        linesall.write(wavecal_store_full_path, path='lines', append=True, format='hdf5')
+        #linesall.write(wavecal_store_full_path, path='lines', append=True, format='hdf5')
+
+        session = object_session(self)
+
+        gmos_long_slit_wavecal = GMOSLongSlitArcWavelengthSolution(id = self.id, fname=wavecal_store_fname,
+                                                                   path=os.path.abspath(destination_dir))
+
+        session.add(gmos_long_slit_wavecal)
+        session.commit()
+
+        return gmos_long_slit_wavecal
+
+
+
 
 
     @property
@@ -785,6 +801,7 @@ class GMOSLongSlitArc(Base):
 
 
 
+
 class GMOSLongSlitArcWavelengthSolution(Base):
     __tablename__ = 'gmos_longslit_wavelength_solution'
 
@@ -798,6 +815,12 @@ class GMOSLongSlitArcWavelengthSolution(Base):
     def full_path(self):
         return os.path.join(self.path, self.fname)
 
+
+# standard decorator style
+@event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
+def receive_before_delete(mapper, connection, target):
+    logger.info('Deleting WaveCal file {0}'.format(target.full_path))
+    os.remove(target.full_path)
 
 
 

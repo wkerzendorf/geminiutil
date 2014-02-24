@@ -2,6 +2,11 @@
 GMOS Wavelength Calibration
 ***************************
 
+Quick & Automatic Wavelength Calibration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
 
 
 Manual wavelength calibration
