@@ -59,12 +59,3 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
     rms_slice = slice(rms_space.argmin()-5, rms_space.argmin()+5)
     a, b, c = np.polyfit(pixel_shifts[rms_slice], rms_space[rms_slice], 2)
     fitted_shift = -b/(2*a)
-
-
-    slices = []
-    for i in xrange(len(slice_lower_edge)):
-        mdf_line = mdf_table[i]
-        slices.append(GMOSMOSSlice(list_id=i, object_id=int(mdf_line['ID']), priority=int(mdf_line['priority']),
-                            slice_set_id=science_set.id, lower_edge=slice_lower_edge[i]+fitted_shift,
-                            upper_edge=slice_upper_edge[i]+fitted_shift))
-    return slices
