@@ -796,7 +796,7 @@ class GMOSLongSlitArc(Base):
         wavecal_store_fname = 'arccal-{}.h5'.format(self.raw.fits.fname.replace('.fits',''))
         wavecal_store_full_path = os.path.join(destination_dir, wavecal_store_fname)
         arctab.write(wavecal_store_full_path, path='arc', overwrite=True, format='hdf5')
-        #linesall.write(wavecal_store_full_path, path='lines', append=True, format='hdf5')
+        linesall.write(wavecal_store_full_path, path='lines', append=True, format='hdf5')
 
         session = object_session(self)
 
