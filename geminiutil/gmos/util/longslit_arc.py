@@ -32,7 +32,8 @@ import extract_psf.extract as extract
 from astropy.table import Table
 import astropy.units as u
 
-from prepare_frame import multiext_data, multiext_header_value, multiext_x_coords
+from prepare_frame import (multiext_data, multiext_header_value,
+                           multiext_x_coords)
 from wavecal import LineTable, ThreeChipLineTable
 from estimate_disp import estimate_disp
 
@@ -45,7 +46,7 @@ class GMOSLongslitArcCalibration(object):
                  min_curvature=[5.,3.,2.],
                  minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
                  minlist2=[(2.,0.), (0.26,0.), (0.1,0.)],
-                 data_slice=slice(1150, 1250)):
+                 fitrange=slice(1150, 1250)):
         try:  # is this a quantity with a unit of length?
             line_catalog.to(u.m)
         except:  # convert to angstrom
@@ -60,7 +61,7 @@ class GMOSLongslitArcCalibration(object):
         # for if one really needs to twiddle
         self.get_arcs_skypol = 2
         self.get_arcs_clip = 3.
-        self.data_slice = data_slice
+        self.fitrange = fitrange
 
     def __call__(self, prepared_arc, doplot=False):
         """Find wavelength solution.
@@ -113,7 +114,7 @@ class GMOSLongslitArcCalibration(object):
         return arctab, linesall, shift, fake
 
 
-def get_arcs(image, skypol=2, clip=3, fferr=0.015):
+def get_arcs(image, skypol=2, clip=3, fferr=0.015, fitrange=None):
     """Fit arc image and create table with one-dimensional arc spectra.
 
     Parameters
@@ -128,6 +129,8 @@ def get_arcs(image, skypol=2, clip=3, fferr=0.015):
     fferr: ~float, optional
         Flat field uncertainty, used for estimating uncertainties
         (default: 0.015)
+    fitrange: slice, or list of two ~int
+        slice along slit, or offsets relative to centre, to extract arc from
 
     Returns
     -------
@@ -141,6 +144,7 @@ def get_arcs(image, skypol=2, clip=3, fferr=0.015):
 
     arc, chi2, _, ntbadl, ntbadh = extract.fitsky(data, ron=ron, skypol=skypol,
                                                   clip=clip, fferr=0.015,
+                                                  fitrange=fitrange,
                                                   ibadlimit=7)
     x = multiext_x_coords(image, 'CCDSEC').squeeze()
     arctab = Table([x.T, arc.T, chi2.T], names=('x', 'f', 'chi2'))
