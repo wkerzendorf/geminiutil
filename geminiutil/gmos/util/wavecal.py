@@ -118,12 +118,12 @@ class LineTable(Table):
         names = kwargs.pop('names', None)
         assert names is not None
         assert len(names) == len(args)
-        dtypes = kwargs.pop('dtypes', (np.float,)*len(args))
-        assert len(dtypes) == len(args)
+        dtype = kwargs.pop('dtype', (np.float,)*len(args))
+        assert len(dtype) == len(args)
         Table.__init__(self,
                        args + (np.zeros((args[0].size,)),)*3,
                        names=names+('fit', 'id', 'resid'),
-                       dtypes=dtypes+(np.float,)*3,
+                       dtype=dtype+(np.float,)*3,
                        masked=True)
         self.meta['class'] = self.__class__.__name__
         self.meta['id.mask_value'] = self['id'].fill_value
