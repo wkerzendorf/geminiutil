@@ -4,10 +4,11 @@ Documentation
 The documentation for `geminiutil`
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
     general
     initializing
     exploring
+    reduction
 
 
