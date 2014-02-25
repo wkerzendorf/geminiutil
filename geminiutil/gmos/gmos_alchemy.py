@@ -660,7 +660,7 @@ class GMOSMOSScienceSet(Base):
                 logger.warn('Deleting existing slice set and recreating new one')
                 session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
 
-        mdf_table = calculate_slice_geometries(self, shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
+        mdf_table = self.calculate_slice_geometries(shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
         slices = []
         for i, line in enumerate(mdf_table):
             slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
