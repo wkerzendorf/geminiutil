@@ -36,6 +36,17 @@ well, however, these do not have corresponding files. Currently we only support 
 
 >>> proj.link_masks()
 
+
+Linking Arcs
+^^^^^^^^^^^^^
+
+This step will link the Longslit arcs to a GMOSLongSlitArc object that contains information about the arc used. In addition,
+these GMOSLongSlitArcs have methods for calibration.
+
+>>> proj.link_long_slit_arcs()
+
+
+
 Grouping Science Sets
 ^^^^^^^^^^^^^^^^^^^^^
 

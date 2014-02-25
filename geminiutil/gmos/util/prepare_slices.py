@@ -15,8 +15,8 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
 
 
     #calculating the slitsize and slit position from the MDF and instrument information
-    naxis1, naxis2 = science_frame.prepared_fits.fits.fits_data[1].header['naxis1'] * units.pix, \
-                     science_frame.prepared_fits.fits.fits_data[1].header['naxis2'] * units.pix
+    naxis1, naxis2 = science_frame.prepared.fits.fits_data[1].header['naxis1'] * units.pix, \
+                     science_frame.prepared.fits.fits_data[1].header['naxis2'] * units.pix
 
     slit_pos_x = mdf_table['slitpos_mx'].astype(np.float64) * units.mm
     slit_pos_x *= science_frame.instrument_setup.x_pix_per_mm

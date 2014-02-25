@@ -8,18 +8,20 @@ from .. import base
 
 from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
+from sqlalchemy import event
 
 from sqlalchemy.orm import relationship, backref, object_session
 from sqlalchemy import func
 
 from astropy.utils import misc
-from astropy import units
+from astropy import units as u
 
-from astropy import time
+from astropy import time, table
 
 import numpy as np
 
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,10 @@ from sqlalchemy import String, Integer, Float, DateTime, Boolean
 from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 
 class GMOSDatabaseDuplicate(Exception):
+    pass
+
+class GMOSNotPreparedError(Exception):
+    #raised if a prepared fits is needed but none found for certain tasks
     pass
 
 class GMOSMask(Base):
@@ -143,14 +149,14 @@ class GMOSDetector(Base):
     @misc.lazyproperty
     def pixel_scale(self):
         if self.ccd_name.startswith('EEV'):
-            return detector_information['pixel_scale'][self.instrument.name]['eev'] * units.Unit('arcsec/pixel')
+            return detector_information['pixel_scale'][self.instrument.name]['eev'] * u.Unit('arcsec/pixel')
         else:
             raise NotImplemented('CCD %s not implemented yet' % self.ccd_name)
 
     @misc.lazyproperty
     def spectral_cutoff(self):
         if self.ccd_name.startswith('EEV'):
-            return detector_information['spectral_cutoff']['eev'] * units.Unit('nm')
+            return detector_information['spectral_cutoff']['eev'] * u.Unit('nm')
         else:
             raise NotImplemented('CCD %s not implemented yet' % self.ccd_name)
 
@@ -182,11 +188,11 @@ class GMOSFilter(Base):
 
     @property
     def wavelength_start(self):
-        return units.Quantity(self.wavelength_start_value, self.wavelength_start_unit)
+        return u.Quantity(self.wavelength_start_value, self.wavelength_start_unit)
 
     @property
     def wavelength_end(self):
-        return units.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
+        return u.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
 
     @misc.lazyproperty
     def wavelength(self):
@@ -212,27 +218,27 @@ class GMOSGrating(Base):
     name = Column(String)
 
     ruling_density_value = Column(Float)
-    ruling_density_unit = units.Unit('1/mm') # lines/mm
+    ruling_density_unit = u.Unit('1/mm') # lines/mm
 
     blaze_wavelength_value = Column(Float)
-    blaze_wavelength_unit = units.Unit('nm')
+    blaze_wavelength_unit = u.Unit('nm')
 
     R = Column(Float)
 
     coverage_value = Column(Float)
-    coverage_unit = units.Unit('nm')
+    coverage_unit = u.Unit('nm')
 
     wavelength_start_value = Column(Float)
-    wavelength_start_unit = units.Unit('nm')
+    wavelength_start_unit = u.Unit('nm')
 
     wavelength_end_value = Column(Float)
-    wavelength_end_unit = units.Unit('nm')
+    wavelength_end_unit = u.Unit('nm')
 
     wavelength_offset_value = Column(Float)
-    wavelength_offset_unit = units.Unit('nm')
+    wavelength_offset_unit = u.Unit('nm')
 
     y_offset_value = Column(Float)
-    y_offset_unit = units.Unit('pix')
+    y_offset_unit = u.Unit('pix')
 
 
     def __getattr__(self, item):
@@ -240,7 +246,7 @@ class GMOSGrating(Base):
                     'wavelength_offset', 'y_offset']:
             item_value = getattr(self, '%s_value' % item)
             item_unit = getattr(self, '%s_unit' % item)
-            return units.Quantity(item_value, item_unit)
+            return u.Quantity(item_value, item_unit)
         else:
             raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
 
@@ -271,13 +277,13 @@ class GMOSMOSInstrumentSetup(Base):
     grating_id = Column(Integer, ForeignKey('gmos_gratings.id'))
 
     grating_slit_wavelength_value = Column(Float)
-    grating_slit_wavelength_unit = units.Unit('nm')
+    grating_slit_wavelength_unit = u.Unit('nm')
 
     grating_central_wavelength_value = Column(Float)
-    grating_central_wavelength_unit = units.Unit('nm')
+    grating_central_wavelength_unit = u.Unit('nm')
 
     grating_tilt_value = Column(Float)
-    grating_tilt_unit = units.Unit('degree')
+    grating_tilt_unit = u.Unit('degree')
 
     grating_order = Column(Integer)
 
@@ -383,7 +389,7 @@ class GMOSMOSInstrumentSetup(Base):
         if item in ['grating_slit_wavelength', 'grating_central_wavelength', 'grating_tilt']:
             item_value = getattr(self, '%s_value' % item)
             item_unit = getattr(self, '%s_unit' % item)
-            return units.Quantity(item_value, item_unit)
+            return u.Quantity(item_value, item_unit)
         else:
             return self.__getattribute__(item)
 
@@ -401,7 +407,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def anamorphic_factor(self):
-        return np.sin((self.calculated_grating_tilt + 50 * units.degree).to('rad').value) / \
+        return np.sin((self.calculated_grating_tilt + 50 * u.degree).to('rad').value) / \
                np.sin(self.calculated_grating_tilt.to('rad').value)
 
 
@@ -412,7 +418,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def calculated_grating_tilt(self):
-        return grating_equation_interpolator(self.grating_equation_coefficient) * units.degree
+        return grating_equation_interpolator(self.grating_equation_coefficient) * u.degree
 
 
     @misc.lazyproperty
@@ -420,7 +426,7 @@ class GMOSMOSInstrumentSetup(Base):
         wavelength_start_value = np.max([item.to('nm').value for item in [self.filter1.wavelength_start,
                                                                           self.filter2.wavelength_start,
                                                                           self.grating.wavelength_start]])
-        return wavelength_start_value * units.Unit('nm')
+        return wavelength_start_value * u.Unit('nm')
 
     @misc.lazyproperty
     def wavelength_end(self):
@@ -428,7 +434,7 @@ class GMOSMOSInstrumentSetup(Base):
                                                                         self.filter2.wavelength_end,
                                                                         self.detectors[-1].spectral_cutoff,
                                                                         self.grating.wavelength_end]])
-        return wavelength_end_value * units.Unit('nm')
+        return wavelength_end_value * u.Unit('nm')
 
     @misc.lazyproperty
     def y_offset(self):
@@ -440,7 +446,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     @misc.lazyproperty
     def arcsec_per_mm(self):
-        return detector_information['arcsecpermm'] * units.Unit('arcsec/mm')
+        return detector_information['arcsecpermm'] * u.Unit('arcsec/mm')
 
     @misc.lazyproperty
     def x_pix_per_mm(self):
@@ -466,7 +472,7 @@ class GMOSMOSInstrumentSetup(Base):
             Parameters
             ----------
 
-            slit_width : `~astropy.units.Quantity`
+            slit_width : `~astropy.u.Quantity`
                 angle
         """
         return self.grating_equation_coefficient / (slit_width.to('rad').value * 81.0 *
@@ -486,9 +492,7 @@ class GMOSMOSInstrumentSetup(Base):
         xscale = self.x_scale.to('rad/pix').value
         spectral_pixel_scale_value = self.anamorphic_factor * xscale * self.grating_central_wavelength.to('nm').value * \
             81.0 * np.sin(self.calculated_grating_tilt.to('rad').value) / self.grating_equation_coefficient
-        return spectral_pixel_scale_value * units.Unit('nm/pix')
-
-
+        return spectral_pixel_scale_value * u.Unit('nm/pix')
 
     def __repr__(self):
         return "<GMOS MOS Instrument Setup ID=%s Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
@@ -498,7 +502,6 @@ class GMOSMOSInstrumentSetup(Base):
 
 class GMOSMOSRawFITS(Base):
     __tablename__ = 'gmos_mos_raw_fits'
-
 
     id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
     mjd = Column(Float)
@@ -551,6 +554,7 @@ class GMOSMOSRawFITS(Base):
         self.mask_id = mask_id
         self.object_id = object_id
         self.instrument_setup_id = instrument_setup_id
+
     def __repr__(self):
         return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'.format(self.id,
                                                                                         self.fits.fname,
@@ -573,6 +577,7 @@ class GMOSMOSRawFITS(Base):
         if prepare_function is None:
             logger.debug('no prepare function given - using defaults')
             prepare_function = GMOSPrepareFrame()
+
         prepared_fits = self.prepare(prepare_function=prepare_function)
 
         prepared_fname = '{0}-{1}'.format(prepare_function.file_prefix, self.fits.fname)
@@ -679,6 +684,144 @@ class GMOSMOSSlice(Base):
 
     def get_read_noises(self):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
+
+class GMOSArcLamp(Base):
+    __tablename__ = 'gmos_arc_lamp'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+    line_list_fname = Column(String)
+    line_list_path = Column(String)
+
+
+
+
+    @property
+    def line_list_fullpath(self):
+        return os.path.join(self.line_list_path, self.line_list_fname)
+
+    def read_line_list(self):
+        line_list = np.genfromtxt(self.line_list_fullpath,
+                                  dtype=[('w','f8'), ('ion','a7'), ('strength','i4')],
+                                  delimiter=[9, 7, 8])
+
+        return table.Table(line_list)
+
+    def __repr__(self):
+        return "<GMOS Arc Lamp {0}>".format(self.name)
+
+
+class GMOSLongSlitArc(Base):
+    __tablename__ = 'gmos_longslit_arc'
+
+    id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'), primary_key=True)
+    arc_lamp_id = Column(Integer, ForeignKey('gmos_arc_lamp.id'))
+
+
+    arc_lamp = relationship(GMOSArcLamp, uselist=False, backref='arcs')
+    raw = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id))
+
+    _line_identify_defaults = {'r': dict(min_curvature=[1.,1.,0.5],
+                                       minlist1=[(3.,0.), (1.,0.), (0.26,0.)],
+                                       minlist2=[(2.,0.), (1.,0.), (0.26,0.)]),
+                             'b': dict(min_curvature=[5.,3.,2.],
+                                       minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
+                                       minlist2=[(2.,0.), (0.26,0.), (0.1,0.)])}
+
+    def prepare_longslit_arc(self, destination_dir='.', force=False):
+        prepare_function = GMOSPrepareFrame(bias_subslice=[slice(None), slice(1,11)],
+                                  data_subslice=[slice(1150,1250),slice(-1)])
+        self.raw.prepare_to_database(prepare_function=prepare_function, destination_dir=destination_dir, force=force)
+
+    def longslit_calibrate(self, gmos_long_slit_arc_calibration=None, doplot=False):
+        from geminiutil.gmos.util.longslit_arc import GMOSLongslitArcCalibration
+
+        if self.prepared is None:
+            raise GMOSNotPreparedError("This Longslit arc has not been prepared")
+
+        if gmos_long_slit_arc_calibration is None:
+            line_list = self.arc_lamp.read_line_list()['w'] * u.angstrom
+            line_identify_defaults = self._line_identify_defaults[self.raw.instrument_setup.grating.name[0].lower()]
+            gmos_long_slit_arc_calibration = GMOSLongslitArcCalibration(line_catalog=line_list,
+                                                                        **line_identify_defaults)
+
+        return gmos_long_slit_arc_calibration(self.prepared, doplot=doplot)
+
+
+
+    def longslit_calibrate_to_database(self, gmos_long_slit_arc_calibration=None, destination_dir='.', force=False):
+
+        session = object_session(self)
+
+        if self.wave_cal is not None:
+            if not force:
+                raise GMOSDatabaseDuplicate('This arc already has a wavelength calibration {0}. '
+                                            'Use force=True to override'.format(self.wave_cal))
+            else:
+                session.delete(self.wave_cal)
+                session.commit()
+
+        arctab, linesall, shift, fake = self.longslit_calibrate(gmos_long_slit_arc_calibration=gmos_long_slit_arc_calibration)
+
+        wavecal_store_fname = 'arccal-{}.h5'.format(self.raw.fits.fname.replace('.fits',''))
+        wavecal_store_full_path = os.path.join(destination_dir, wavecal_store_fname)
+        arctab.write(wavecal_store_full_path, path='arc', overwrite=True, format='hdf5')
+        #linesall.write(wavecal_store_full_path, path='lines', append=True, format='hdf5')
+
+        session = object_session(self)
+
+        gmos_long_slit_wavecal = GMOSLongSlitArcWavelengthSolution(id = self.id, fname=wavecal_store_fname,
+                                                                   path=os.path.abspath(destination_dir))
+
+        session.add(gmos_long_slit_wavecal)
+        session.commit()
+
+        return gmos_long_slit_wavecal
+
+
+
+
+
+    @property
+    def prepared(self):
+        return self.raw.prepared
+
+    def __repr__(self):
+        instrument_setup = self.raw.instrument_setup
+        return '<GMOS long slit arc "{0}" Slit {1} Filter1 {2} Filter2 {3} Grating {4} Tilt {5} ' \
+               'central wave={6:.2f} {7}>'.format(self.raw.fits.fname,
+                                                  self.raw.mask.name,
+                                               instrument_setup.filter1,
+                                               instrument_setup.filter2,
+                                               instrument_setup.grating,
+                                               instrument_setup.grating_tilt_value,
+                                               instrument_setup.grating_central_wavelength_value,
+                                               instrument_setup.grating_central_wavelength_unit)
+
+
+
+
+class GMOSLongSlitArcWavelengthSolution(Base):
+    __tablename__ = 'gmos_longslit_wavelength_solution'
+
+    id = Column(Integer, ForeignKey('gmos_longslit_arc.id'), primary_key=True)
+    fname = Column(String)
+    path = Column(String)
+
+    longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
+
+    @property
+    def full_path(self):
+        return os.path.join(self.path, self.fname)
+
+
+# standard decorator style
+@event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
+def receive_before_delete(mapper, connection, target):
+    logger.info('Deleting WaveCal file {0}'.format(target.full_path))
+    os.remove(target.full_path)
+
 
 
 class GMOSMOSSliceWaveCal(Base):
