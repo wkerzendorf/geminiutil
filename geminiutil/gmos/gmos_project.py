@@ -272,6 +272,14 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
+    def link_database(self):
+        """
+            Linking the raw files into meaningful constructs (i.e. masks, ...)
+        """
+        self.link_masks()
+        self.link_longslit_arcs()
+        self.link_science_sets()
+
 
     def initialize_database(self, configuration_dir=None):
         """Read in GMOS filter/grating information, for matching to headers."""
