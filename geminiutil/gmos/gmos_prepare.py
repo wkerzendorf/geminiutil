@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import object_session
 
 class GMOSPrepareFrame(object):  # will be base when we know what
-    __tablename__ = 'gmos_prepare'
-
     file_prefix = 'prep'
 
     def __init__(self, bias_subslice=[slice(None), slice(1,11)],

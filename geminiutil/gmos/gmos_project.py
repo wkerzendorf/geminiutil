@@ -1,5 +1,6 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
+from geminiutil.base.gemini_alchemy import AbstractFileTable
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
     GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
 import logging
@@ -10,7 +11,7 @@ from astropy import time
 import numpy as np
 import re
 import os
-import pdb
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,14 @@ class GMOSMOSProject(BaseProject):
     >>> daycal_list = proj.daycal
     """
 
-    def __init__(self, database_string, echo=False):
+    def __init__(self, database_string, work_dir, echo=False):
         super(GMOSMOSProject, self).__init__(database_string, 
                                              GMOSMOSRawFITS, echo=echo)
 
+        if not os.path.exists(work_dir):
+            raise ValueError('Working directory {0} does not exist'.format(work_dir))
+
+        AbstractFileTable.work_dir = work_dir
     @property
     def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""

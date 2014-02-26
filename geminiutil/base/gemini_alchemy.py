@@ -69,12 +69,18 @@ class AbstractFileTable(Base):
         if use_abspath:
             logger.warn('Using absolute paths is now discouraged - all files should be located in one workdirectory')
             path = os.path.abspath(os.path.dirname(full_fname))
+        else:
+            path = os.path.dirname(full_fname)
 
         filesize = os.path.getsize(full_fname)
         md5_hash = hashfile(file(full_fname, 'rb'), hashlib.md5())
 
         return cls(fname=fname, path=path, size=filesize, md5=md5_hash)
 
+
+    @property
+    def full_path(self):
+        return os.path.join(self.work_dir, self.path, self.fname)
 
 
 class FITSFile(AbstractFileTable):
@@ -93,9 +99,6 @@ class FITSFile(AbstractFileTable):
         return fits_obj
 
 
-    @property
-    def full_path(self):
-        return os.path.join(self.path, self.fname)
 
     @property
     def fits_data(self):
@@ -126,7 +129,7 @@ class FITSFile(AbstractFileTable):
         return session.query(FITSFile).join(Operations, Operations.input_fits_id==FITSFile.id).filter(Operations.output_fits_id==self.id).all()
 
 
-    def __init__(self, fname, path, size, md5, extensions):
+    def __init__(self, fname, path, size, md5, extensions=None):
         self.fname = fname
         self.path = path
         self.size = size
