@@ -234,7 +234,7 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
-    def link_science_sets(self, science_instrument2longslit_instrument, longslit_arc_type='0.5arcsec'):
+    def link_science_sets(self):
         """
         Linking individual science observations (single fits files) to its calibration data
 
