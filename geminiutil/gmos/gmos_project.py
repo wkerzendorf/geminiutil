@@ -97,6 +97,8 @@ class GMOSMOSProject(BaseProject):
         else:
             return self.__getattribute__(item)
 
+
+
     def classify_added_fits(self, current_fits):
         fits_object = self.add_gmos_raw_fits(current_fits)
         if fits_object is not None:
