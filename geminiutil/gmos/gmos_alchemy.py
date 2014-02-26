@@ -714,21 +714,24 @@ class GMOSMOSSlice(Base):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
 
-
 class GMOSArcLamp(Base):
-
     __tablename__ = 'gmos_arc_lamp'
 
-
+    id = Column(Integer, primary_key=True)
     name = Column(String)
 
+    line_list_fname = Column(String)
+    line_list_path = Column(String)
 
 
 
 
+    @property
+    def line_list_fullpath(self):
+        return os.path.join(self.line_list_path, self.line_list_fname)
 
     def read_line_list(self):
-        line_list = np.genfromtxt(self.full_path,
+        line_list = np.genfromtxt(self.line_list_fullpath,
                                   dtype=[('w','f8'), ('ion','a7'), ('strength','i4')],
                                   delimiter=[9, 7, 8])
 
@@ -834,6 +837,7 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
     id = Column(Integer, ForeignKey('gmos_longslit_arc.id'), primary_key=True)
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
+
 
 
     def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
