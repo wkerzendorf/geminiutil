@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 from glob import glob
 import numpy as np
+import geminiutil
+import os
 
 def hashfile(afile, hasher, blocksize=65536):
     buf = afile.read(blocksize)
@@ -82,6 +84,10 @@ class AbstractFileTable(Base):
     def full_path(self):
         return os.path.join(self.work_dir, self.path, self.fname)
 
+
+class AbstractCalibrationFileTable(AbstractFileTable):
+
+    work_dir = os.path.join(geminiutil.__path__[0], 'data')
 
 class FITSFile(AbstractFileTable):
     __tablename__ = 'fits_file'
