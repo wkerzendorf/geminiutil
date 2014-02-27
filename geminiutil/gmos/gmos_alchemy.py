@@ -179,7 +179,7 @@ class GMOSDetector(Base):
 
 
 
-class GMOSFilter(AbstractFileTable):
+class GMOSFilter(AbstractCalibrationFileTable):
     __tablename__ = 'gmos_filters'
 
     name = Column(String)

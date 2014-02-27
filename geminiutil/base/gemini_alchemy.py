@@ -86,6 +86,7 @@ class AbstractFileTable(Base):
 
 
 class AbstractCalibrationFileTable(AbstractFileTable):
+    __abstract__ = True
 
     work_dir = os.path.join(geminiutil.__path__[0], 'data')
 
