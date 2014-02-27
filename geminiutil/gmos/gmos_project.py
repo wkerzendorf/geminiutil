@@ -356,11 +356,3 @@ class GMOSMOSProject(BaseProject):
                              y_offset_value=0.0)
         self.session.add(mirror)
         self.session.commit()
-
-    def prepare_science_sets(self, force=False):
-        """
-            prepare all science required data
-        """
-
-        if force:
-            raise ValueError('currently force is not supported')
