@@ -2,7 +2,10 @@
 import os
 import yaml
 
-from ..base import Base, FITSFile, Instrument, ObservationType, ObservationClass, ObservationBlock, Object
+from geminiutil.base import Base, Object
+
+from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, Instrument, ObservationType, \
+    ObservationClass, ObservationBlock
 
 from .. import base
 
@@ -170,23 +173,16 @@ class GMOSDetector(Base):
 
 
 
-class GMOSFilter(Base):
+class GMOSFilter(AbstractFileTable):
     __tablename__ = 'gmos_filters'
 
-    id = Column(Integer, primary_key=True)
     name = Column(String)
-    fname = Column(String)
-    path = Column(String)
     wavelength_start_value = Column(Float)
     wavelength_start_unit = Column(String)
 
     wavelength_end_value = Column(Float)
     wavelength_end_unit = Column(String)
 
-
-    @property
-    def full_path(self):
-        return os.path.join(self.path, self.fname)
 
     @property
     def wavelength_start(self):
@@ -835,18 +831,14 @@ class GMOSLongSlitArc(Base):
 
 
 
-class GMOSLongSlitArcWavelengthSolution(Base):
+class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
     __tablename__ = 'gmos_longslit_wavelength_solution'
 
     id = Column(Integer, ForeignKey('gmos_longslit_arc.id'), primary_key=True)
-    fname = Column(String)
-    path = Column(String)
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
 
-    @property
-    def full_path(self):
-        return os.path.join(self.path, self.fname)
+
 
     def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
         return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)

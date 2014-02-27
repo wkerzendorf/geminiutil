@@ -1,5 +1,6 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
+from geminiutil.base.gemini_alchemy import AbstractFileTable
 from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
     GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
 import logging
@@ -10,7 +11,7 @@ from astropy import time
 import numpy as np
 import re
 import os
-import pdb
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,14 @@ class GMOSMOSProject(BaseProject):
     >>> daycal_list = proj.daycal
     """
 
-    def __init__(self, database_string, echo=False):
+    def __init__(self, database_string, work_dir, echo=False):
         super(GMOSMOSProject, self).__init__(database_string, 
                                              GMOSMOSRawFITS, echo=echo)
 
+        if not os.path.exists(work_dir):
+            raise ValueError('Working directory {0} does not exist'.format(work_dir))
+
+        AbstractFileTable.work_dir = work_dir
     @property
     def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
@@ -96,6 +101,8 @@ class GMOSMOSProject(BaseProject):
             return self.__getattr__(item+'_query').all()
         else:
             return self.__getattribute__(item)
+
+
 
     def classify_added_fits(self, current_fits):
         fits_object = self.add_gmos_raw_fits(current_fits)
@@ -234,7 +241,7 @@ class GMOSMOSProject(BaseProject):
         self.session.commit()
 
 
-    def link_science_sets(self, science_instrument2longslit_instrument, longslit_arc_type='0.5arcsec'):
+    def link_science_sets(self):
         """
         Linking individual science observations (single fits files) to its calibration data
 
@@ -271,6 +278,14 @@ class GMOSMOSProject(BaseProject):
             logger.info('Link Science Frame {0} with:\nFlat: {1}\nMask Arc: {2}\n'.format(science_frame, flat, mask_arc))
         self.session.commit()
 
+
+    def link_database(self):
+        """
+            Linking the raw files into meaningful constructs (i.e. masks, ...)
+        """
+        self.link_masks()
+        self.link_longslit_arcs()
+        self.link_science_sets()
 
 
     def initialize_database(self, configuration_dir=None):

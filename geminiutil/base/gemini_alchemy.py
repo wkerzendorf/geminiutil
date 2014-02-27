@@ -52,32 +52,53 @@ class CategoryBaseClass(object):
             return category_object
 
 
-
-class FITSFile(Base):
-    __tablename__ = 'fits_file'
+class AbstractFileTable(Base):
+    __abstract__ = True
 
     id = Column(Integer, primary_key=True)
     fname = Column(String)
     path = Column(String)
     size = Column(Integer)
-    extensions = Column(Integer)
     md5 = Column(String)
-    scanned = Column(Boolean)
+
+    work_dir = ''
 
     @classmethod
-    def from_fits_file(cls, fname):
-        extensions = len(fits.open(fname))
-        filename = os.path.basename(fname)
-        path = os.path.abspath(os.path.dirname(fname))
-        filesize = os.path.getsize(fname)
-        md5_hash = hashfile(file(fname, 'rb'), hashlib.md5())
+    def from_file(cls, full_fname, use_abspath=False):
+        fname = os.path.basename(full_fname)
+        if use_abspath:
+            logger.warn('Using absolute paths is now discouraged - all files should be located in one workdirectory')
+            path = os.path.abspath(os.path.dirname(full_fname))
+        else:
+            path = os.path.dirname(full_fname)
 
-        return cls(filename, path, filesize, md5_hash, extensions)
+        filesize = os.path.getsize(full_fname)
+        md5_hash = hashfile(file(full_fname, 'rb'), hashlib.md5())
+
+        return cls(fname=fname, path=path, size=filesize, md5=md5_hash)
 
 
     @property
     def full_path(self):
-        return os.path.join(self.path, self.fname)
+        return os.path.join(self.work_dir, self.path, self.fname)
+
+
+class FITSFile(AbstractFileTable):
+    __tablename__ = 'fits_file'
+
+    extensions = Column(Integer)
+
+
+
+    @classmethod
+    def from_fits_file(cls, full_fname, use_abspath=False):
+        extensions = len(fits.open(full_fname))
+
+        fits_obj = cls.from_file(full_fname, use_abspath=use_abspath)
+        fits_obj.extensions = extensions
+        return fits_obj
+
+
 
     @property
     def fits_data(self):
@@ -108,7 +129,7 @@ class FITSFile(Base):
         return session.query(FITSFile).join(Operations, Operations.input_fits_id==FITSFile.id).filter(Operations.output_fits_id==self.id).all()
 
 
-    def __init__(self, fname, path, size, md5, extensions):
+    def __init__(self, fname, path, size, md5, extensions=None):
         self.fname = fname
         self.path = path
         self.size = size
