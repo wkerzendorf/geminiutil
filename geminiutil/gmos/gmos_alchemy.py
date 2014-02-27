@@ -628,7 +628,7 @@ class GMOSMOSScienceSet(Base):
     longslit_arc_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
 
     science = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id),
-                            backref=backref('science_frame', uselist=False))
+                            backref=backref('science_set', uselist=False))
     flat = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==flat_id),
                         backref=backref('flat2science', uselist=False))
     mask_arc = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==mask_arc_id),
