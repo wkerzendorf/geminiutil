@@ -40,6 +40,7 @@ from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
 from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
+from geminiutil.gmos.util.extraction import extract_spectrum
 
 class GMOSDatabaseDuplicate(Exception):
     pass
@@ -660,7 +661,9 @@ class GMOSMOSScienceSet(Base):
                 logger.warn('Deleting existing slice set and recreating new one')
                 session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
 
+
         mdf_table = self.calculate_slice_geometries(shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
+
         slices = []
         for i, line in enumerate(mdf_table):
             slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
@@ -713,6 +716,7 @@ class GMOSMOSSlice(Base):
 
     def get_read_noises(self):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
+
 
 class GMOSArcLamp(Base):
     __tablename__ = 'gmos_arc_lamp'
@@ -844,12 +848,15 @@ class GMOSLongSlitArcWavelengthSolution(Base):
     def full_path(self):
         return os.path.join(self.path, self.fname)
 
+    def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
+        return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
 
 # standard decorator style
 @event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
 def receive_before_delete(mapper, connection, target):
     logger.info('Deleting WaveCal file {0}'.format(target.full_path))
     os.remove(target.full_path)
+
 
 
 

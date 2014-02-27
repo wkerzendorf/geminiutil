@@ -63,4 +63,5 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
     mdf_table['slice_lower_edge'] = slice_lower_edge + fitted_shift
     mdf_table['slice_upper_edge'] = slice_upper_edge + fitted_shift
 
+
     return mdf_table
