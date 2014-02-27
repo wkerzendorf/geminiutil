@@ -11,10 +11,11 @@ def extract_spectrum(gmos_slice, tracepos=None,
     scidata = np.array(gmos_slice.get_prepared_science_data())
     read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
     if tracepos is None:
-        tracepos = np.array([gmos_slice.default_trace_position])
+        tracepos = np.array([scidata.shape[1]/2. -
+                             gmos_slice.default_trace_position])
+        print("Using tracepos={0}".format(tracepos))
 
     #return scidata, read_noise, tracepos
-
 
     e_source = scidata
     psf = extract.PSF(form=0, guesses=[[0., 0.], 8., (2.5, '@')])
