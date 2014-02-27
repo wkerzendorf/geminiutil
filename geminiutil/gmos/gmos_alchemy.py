@@ -713,6 +713,10 @@ class GMOSMOSSlice(Base):
     def get_read_noises(self):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
+    def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
+        return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
+
+
 
 class GMOSArcLamp(Base):
     __tablename__ = 'gmos_arc_lamp'
@@ -838,10 +842,6 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
 
-
-
-    def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
-        return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
 
 # standard decorator style
 @event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
