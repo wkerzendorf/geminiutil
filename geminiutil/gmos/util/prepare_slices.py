@@ -13,6 +13,8 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
     science_frame = science_set.science
     mdf_table = table.Table(science_frame.mask.fits.fits_data[1].data)
 
+    if science_set.science.prepared is None:
+        raise ValueError('science frame {0} of science set {1} is not prepared'.format(science_set.science, science_set))
 
     #calculating the slitsize and slit position from the MDF and instrument information
     naxis1, naxis2 = science_frame.prepared.fits.fits_data[1].header['naxis1'] * units.pix, \
@@ -37,7 +39,7 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
 
 
     if science_set.flat is None:
-        raise ValueError('science_frame does not have flat associated with it')
+        raise ValueError('science set does not have flat associated with it')
 
     flat_slices = np.median(science_set.flat.fits.fits_data[2].data, axis=1)
     slice_model = np.zeros_like(flat_slices)
