@@ -695,6 +695,11 @@ class GMOSMOSSlice(Base):
         return self.science_set.science.prepared.fits.fits_data
 
     @property
+    def prepared_arc_fits_data(self):
+        return self.science_set.mask_arc.prepared.fits.fits_data
+
+
+    @property
     def science_instrument_setup(self):
         return self.science_set.science.instrument_setup
 
@@ -710,14 +715,22 @@ class GMOSMOSSlice(Base):
 
         return science_slice_data
 
+    def get_prepared_arc_data(self):
+        fits_data = self.prepared_arc_fits_data
+        arc_slice = slice(np.ceil(self.lower_edge).astype(int), np.ceil(self.upper_edge).astype(int))
+        arc_slice_data = [fits_data[chip].data[arc_slice, :] for chip in xrange(1, 4)]
+
+        return arc_slice_data
+
+
     def get_read_noises(self):
         return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
 
     def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
         return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
 
-
-
+    def wavelength_calibrate_slice(self):
+        pass
 class GMOSArcLamp(Base):
     __tablename__ = 'gmos_arc_lamp'
 
