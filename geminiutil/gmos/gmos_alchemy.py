@@ -4,7 +4,7 @@ import yaml
 
 from geminiutil.base import Base, Object
 
-from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, Instrument, ObservationType, \
+from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable, Instrument, ObservationType, \
     ObservationClass, ObservationBlock
 
 from .. import base
@@ -731,21 +731,10 @@ class GMOSMOSSlice(Base):
 
     def wavelength_calibrate_slice(self):
         pass
-class GMOSArcLamp(Base):
+class GMOSArcLamp(AbstractCalibrationFileTable):
     __tablename__ = 'gmos_arc_lamp'
 
-    id = Column(Integer, primary_key=True)
     name = Column(String)
-
-    line_list_fname = Column(String)
-    line_list_path = Column(String)
-
-
-
-
-    @property
-    def line_list_fullpath(self):
-        return os.path.join(self.line_list_path, self.line_list_fname)
 
     def read_line_list(self):
         line_list = np.genfromtxt(self.line_list_fullpath,
