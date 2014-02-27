@@ -2,6 +2,8 @@
 import os
 import yaml
 
+import geminiutil
+
 from geminiutil.base import Base, Object
 
 from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable, Instrument, ObservationType, \
@@ -28,10 +30,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-detector_yaml_fname = os.path.join(os.path.dirname(__file__), 'data', 'gmos_detector_information.yml')
+
+gmos_calib_dir = os.path.join(geminiutil.__path__, 'data', 'gmos')
+
+detector_yaml_fname = os.path.join(gmos_calib_dir, 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
 
-grating_eq, tilt = np.loadtxt(os.path.join(os.path.dirname(__file__), 'data', 'gratingeq.dat'), unpack=True)
+grating_eq, tilt = np.loadtxt(os.path.join(gmos_calib_dir, 'gratingeq.dat'), unpack=True)
+
 
 # in the simplest case this is m*lambda = (1/ruling_density) * (sin(beta) + sin(alpha))
 grating_eq_sorting = np.argsort(grating_eq)
