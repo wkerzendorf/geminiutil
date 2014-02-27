@@ -300,7 +300,7 @@ class GMOSMOSProject(BaseProject):
     def _initialize_gmos_arcs(self, configuration_dir=None):
 
         logger.info('Reading Arc information')
-        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat', path=os.path.join(configuration_dir, 'arcs'))
+        cuar_arc = GMOSArcLamp(name='cuar', line_list_fname='CuAr.dat', line_list_path=os.path.join(configuration_dir, 'arcs'))
         self.session.add(cuar_arc)
         self.session.commit()
 
