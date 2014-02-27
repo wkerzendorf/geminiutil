@@ -298,9 +298,8 @@ class GMOSMOSProject(BaseProject):
         self._initialize_gmos_arcs(configuration_dir)
 
     def _initialize_gmos_arcs(self, configuration_dir=None):
-
         logger.info('Reading Arc information')
-        cuar_arc = GMOSArcLamp(name='cuar', line_list_fname='CuAr.dat', line_list_path=os.path.join(configuration_dir, 'arcs'))
+        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat', path=os.path.join('gmos', 'arcs'))
         self.session.add(cuar_arc)
         self.session.commit()
 
@@ -318,8 +317,7 @@ class GMOSMOSProject(BaseProject):
                                     wavelength_end_value=line['wave_end'],
                                     wavelength_end_unit='nm',
                                     fname=line['fname'],
-                                    path=os.path.join(configuration_dir,
-                                                      'filter_data'))
+                                    path=os.path.join('gmos', 'filter_data'))
             self.session.add(new_filter)
 
         open_filter = GMOSFilter(name='open', wavelength_start_value=0,
