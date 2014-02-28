@@ -743,7 +743,7 @@ class GMOSArcLamp(AbstractCalibrationFileTable):
     name = Column(String)
 
     def read_line_list(self):
-        line_list = np.genfromtxt(self.line_list_fullpath,
+        line_list = np.genfromtxt(self.full_path,
                                   dtype=[('w','f8'), ('ion','a7'), ('strength','i4')],
                                   delimiter=[9, 7, 8])
 
