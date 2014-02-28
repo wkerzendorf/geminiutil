@@ -31,7 +31,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-gmos_calib_dir = os.path.join(geminiutil.__path__, 'data', 'gmos')
+gmos_calib_dir = os.path.join(geminiutil.__path__[0], 'data', 'gmos')
 
 detector_yaml_fname = os.path.join(gmos_calib_dir, 'gmos_detector_information.yml')
 detector_information = yaml.load(file(detector_yaml_fname))
