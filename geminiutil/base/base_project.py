@@ -1,4 +1,6 @@
-from .gemini_alchemy import Base, FITSFile, Instrument, Program, ObservationBlock, ObservationClass, ObservationType
+from geminiutil.base.gemini_alchemy import Base, FITSFile, Instrument, Program, \
+    ObservationBlock, ObservationClass, ObservationType, AbstractFileTable
+
 
 from sqlalchemy import engine, create_engine
 from sqlalchemy.orm import sessionmaker, backref, relationship, object_session
@@ -7,6 +9,7 @@ from glob import glob
 import os
 import logging
 
+import urllib2
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,7 @@ def get_category(session, category_str, category):
 
 class BaseProject(object):
 
-    def __init__(self, database_string, raw_fits_class, echo=False):
+    def __init__(self, database_string, work_dir, raw_fits_class=FITSFile, echo=False):
         self.metadata = Base.metadata
         self.engine = create_engine(database_string, echo=echo)
         self.metadata.bind = self.engine
@@ -33,6 +36,48 @@ class BaseProject(object):
         self.conn = self.session.bind.connect()
 
         self.raw_fits_class = raw_fits_class
+
+        if not os.path.exists(work_dir):
+            raise ValueError('Working directory {0} does not exist'.format(work_dir))
+
+        AbstractFileTable.work_dir = work_dir
+
+        self.work_dir = work_dir
+
+
+    def download_raw_fits(self, fname, username, password, raw_directory='raw', ):
+        """
+        Download files from a "cadcUrlList.txt" into the database.
+
+
+        Parameters
+        ----------
+
+        fname: str
+            name of the url list file
+
+        username: str
+            CADC username
+
+        password: str
+            CADC password
+
+        raw_directory: str
+            relative path to the raw fits directory (default='raw')
+        """
+
+        raw_directory = os.path.join(self.work_dir, raw_directory)
+
+        if not os.path.exists(os.path.join(self.work_dir)):
+            logger.warn('Raw directory {} does not exist - creating'.format(raw_directory))
+            os.mkdir(raw_directory)
+
+
+        base_url = "http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/GEMINI"
+
+
+
+
 
 
 

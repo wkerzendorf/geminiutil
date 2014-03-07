@@ -734,11 +734,6 @@ class GMOSMOSSlice(Base):
 
     def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
         return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
-<<<<<<< HEAD
-=======
-
-
->>>>>>> added extraction into slices again
 
     def wavelength_calibrate_slice(self):
         pass

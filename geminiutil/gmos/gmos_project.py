@@ -53,13 +53,9 @@ class GMOSMOSProject(BaseProject):
     """
 
     def __init__(self, database_string, work_dir, echo=False):
-        super(GMOSMOSProject, self).__init__(database_string, 
+        super(GMOSMOSProject, self).__init__(database_string, work_dir, 
                                              GMOSMOSRawFITS, echo=echo)
 
-        if not os.path.exists(work_dir):
-            raise ValueError('Working directory {0} does not exist'.format(work_dir))
-
-        AbstractFileTable.work_dir = work_dir
     @property
     def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
