@@ -45,7 +45,7 @@ class BaseProject(object):
         self.work_dir = work_dir
 
 
-    def download_raw_fits(self, fname, username, password, raw_directory='raw', ):
+    def download_raw_fits(self, fname, username, password, raw_directory='raw', chunk_size=1024):
         """
         Download files from a "cadcUrlList.txt" into the database.
 
@@ -64,16 +64,48 @@ class BaseProject(object):
 
         raw_directory: str
             relative path to the raw fits directory (default='raw')
+
+        chunk_size: int
+            Number of bytes to read in one chunk when downloading (default=1024)
         """
 
         raw_directory = os.path.join(self.work_dir, raw_directory)
 
-        if not os.path.exists(os.path.join(self.work_dir)):
-            logger.warn('Raw directory {} does not exist - creating'.format(raw_directory))
+        if not os.path.exists(raw_directory):
+            print "warn"
+            logger.warn('Raw directory {0} does not exist - creating', raw_directory)
             os.mkdir(raw_directory)
 
 
-        base_url = "http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/GEMINI"
+        try:
+            import requests
+        except ImportError:
+            raise ImportError('The package requests is required for downloading files.')
+
+
+
+        with open(fname) as cadc_fh:
+            for line in cadc_fh:
+                url_request = requests.get(line.strip(), auth=(username, password), stream=True)
+
+                local_fname = url_request.url.split('/')[-1]
+                logger.info("Downloading file {0} from url {1}".format(local_fname, line.strip('\r\n')))
+                ###
+                #Now check if it exists
+                ### if not move on
+
+                with open(os.path.join(raw_directory, local_fname), 'w') as local_fh:
+                    for chunk in url_request.raw.read(chunk_size):
+                        if chunk:
+                            local_fh.write(chunk)
+
+                ###
+                # Now add file to DB
+                #####
+
+
+
+
 
 
 
