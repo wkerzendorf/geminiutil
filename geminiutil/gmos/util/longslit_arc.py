@@ -46,7 +46,7 @@ class GMOSLongslitArcCalibration(object):
                  min_curvature=[5.,3.,2.],
                  minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
                  minlist2=[(2.,0.), (0.26,0.), (0.1,0.)],
-                 fitrange=slice(1150, 1250)):
+                 fitrange=None):
         try:  # is this a quantity with a unit of length?
             line_catalog.to(u.m)
         except:  # convert to angstrom
@@ -63,21 +63,39 @@ class GMOSLongslitArcCalibration(object):
         self.get_arcs_clip = 3.
         self.fitrange = fitrange
 
-    def __call__(self, prepared_arc, doplot=False):
+    def __call__(self, prepared_arc, instrument_setup=None, doplot=False):
         """Find wavelength solution.
-        prepared_arc should have a limited range in the spatial direction."""
-        instrument_setup = prepared_arc.raw_fits.instrument_setup
+        prepared_arc should have a limited range in the spatial direction.
+
+        Parameters
+        ----------
+        prepared_arc : Fits file or geminiutil prepared frame
+            Bias-subtracted arc data
+        instrument_setup : None or geminiutil instrument setup
+            By default, taken from prepared frame; useful only
+            if a fits file is passed on.
+        doplot : Bool
+            Whether to produce a residual plot (default: False)
+        """
+        if instrument_setup is None:
+            instrument_setup = prepared_arc.raw_fits.instrument_setup
+
+        if hasattr(prepared_arc, 'fits'):
+            prepared_data = prepared_arc.fits.fits_data
+        else:
+            prepared_data = prepared_arc
+
         wref = (instrument_setup.grating_central_wavelength_value *
                 instrument_setup.grating_central_wavelength_unit
                 ).to(self.line_catalog.unit).value
         # instrument_setup.detectors[1].naxis1 includes overscan
-        xref_guess = (prepared_arc.fits.fits_data[2].shape[-1] *
+        xref_guess = (prepared_data[2].shape[-1] *
                       instrument_setup.x_binning // 2)
         disp_guess = -(instrument_setup.spectral_pixel_scale /
                        (instrument_setup.x_binning / u.pix)
                        ).to(self.line_catalog.unit).value
         # slit width not yet in data base for long slits
-        slit_width = prepared_arc.fits.fits_data[0].header['maskname']
+        slit_width = prepared_data[0].header['maskname']
         slit_width = float(slit_width.replace('arcsec','')) * u.arcsec
         # get resolution in angstrom, and then in pixels
         slit_width = wref / instrument_setup.calculate_resolution(slit_width)
@@ -85,9 +103,10 @@ class GMOSLongslitArcCalibration(object):
         slit_sigma = abs(disp_guess)  # additional instrumental broadening
 
         # extract spectrum from image
-        arctab = get_arcs(prepared_arc.fits.fits_data,
+        arctab = get_arcs(prepared_data,
                           skypol=self.get_arcs_skypol,
-                          clip=self.get_arcs_clip)
+                          clip=self.get_arcs_clip,
+                          fitrange=self.fitrange)
 
         # estimate dispersion and position of reference wavelength
         xref_estimate, disp_estimate, shift, fake \
