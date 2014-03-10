@@ -850,7 +850,6 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
 
-
 # standard decorator style
 @event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
 def receive_before_delete(mapper, connection, target):

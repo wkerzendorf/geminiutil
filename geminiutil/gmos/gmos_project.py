@@ -53,22 +53,8 @@ class GMOSMOSProject(BaseProject):
     """
 
     def __init__(self, database_string, work_dir, echo=False):
-        super(GMOSMOSProject, self).__init__(database_string, 
+        super(GMOSMOSProject, self).__init__(database_string, work_dir, 
                                              GMOSMOSRawFITS, echo=echo)
-
-        if not os.path.exists(work_dir):
-            raise ValueError('Working directory {0} does not exist'.format(work_dir))
-
-        AbstractFileTable.work_dir = work_dir
-    @property
-    def observation_classes(self):
-        """Names of observation classes in the database (e.g., 'daycal')."""
-        return zip(*self.session.query(base.ObservationClass.name).all())[0]
-
-    @property
-    def observation_types(self):
-        """Names of observation types in the database (e.g., 'science')."""
-        return zip(*self.session.query(base.ObservationType.name).all())[0]
 
     @property
     def science_sets(self):
@@ -105,6 +91,16 @@ class GMOSMOSProject(BaseProject):
 
 
     def classify_added_fits(self, current_fits):
+        """
+        Classify added FITS objects
+
+        Parameters
+        ----------
+
+        current_fits: FITSFile
+            FITSFile object to classify
+        """
+
         fits_object = self.add_gmos_raw_fits(current_fits)
         if fits_object is not None:
             return fits_object

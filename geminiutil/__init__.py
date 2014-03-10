@@ -123,6 +123,7 @@ if not _PACKAGE_SETUP_:
 
     del os, warn, config_dir  # clean up namespace
 
+
 logger = logging.getLogger('geminiutil')
 logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
