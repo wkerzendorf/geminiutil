@@ -41,7 +41,7 @@ from estimate_disp import estimate_disp
 class GMOSLongslitArcCalibration(object):
 
     def __init__(self, line_catalog,
-                 xref_grid=np.arange(-40, 40),
+                 xref_grid=np.arange(-40, 40, 1.),
                  frac_disp_grid=np.linspace(0.97, 1.03, 31),
                  min_curvature=[5.,3.,2.],
                  minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
@@ -100,7 +100,7 @@ class GMOSLongslitArcCalibration(object):
         # get resolution in angstrom, and then in pixels
         slit_width = wref / instrument_setup.calculate_resolution(slit_width)
         slit_width /= abs(disp_guess)
-        slit_sigma = abs(disp_guess)  # additional instrumental broadening
+        slit_sigma = 1.  # further instrumental broadening of 1 pixel
 
         # extract spectrum from image
         arctab = get_arcs(prepared_data,
