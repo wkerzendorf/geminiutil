@@ -221,6 +221,9 @@ def estimate_disp(arc, wref, xref_grid, disp_grid, comparison=None,
 
     xrefbest, dwbest = fit_peak2d(shift['xref'], shift.meta['dw'],
                                   shift['chi2'], (imin, jmin))
+    shift.meta['xrefbest'] = xrefbest
+    shift.meta['dwbest'] = dwbest
+
     if full:
         if line_catalog is not None:
             return xrefbest, dwbest, shift, model

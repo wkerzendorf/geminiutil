@@ -764,11 +764,13 @@ class GMOSLongSlitArc(Base):
     raw = relationship(GMOSMOSRawFITS, primaryjoin=(GMOSMOSRawFITS.id==id))
 
     _line_identify_defaults = {'r': dict(min_curvature=[1.,1.,0.5],
-                                       minlist1=[(3.,0.), (1.,0.), (0.26,0.)],
-                                       minlist2=[(2.,0.), (1.,0.), (0.26,0.)]),
-                             'b': dict(min_curvature=[5.,3.,2.],
-                                       minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.1,0.)],
-                                       minlist2=[(2.,0.), (0.26,0.), (0.1,0.)])}
+                                         minlist1=[(3.,0.), (1.,0.), (0.26,0.)],
+                                         minlist2=[(2.,0.), (1.,0.), (0.26,0.)],
+                                         fitrange=(-50,50)),
+                               'b': dict(min_curvature=[5.,3.,2.],
+                                         minlist1=[(3.,1e3), (1.,3e2), (0.26,0.), (0.13,0.)],
+                                         minlist2=[(1.,3e2), (0.26,0.), (0.26,0.), (0.2,0.), (0.13,0.)],
+                                         fitrange=(-50,50))}
 
     def prepare_longslit_arc(self, destination_dir='.', force=False):
         prepare_function = GMOSPrepareFrame(bias_subslice=[slice(None), slice(1,11)],
@@ -870,5 +872,3 @@ class GMOSMOSSliceWaveCal(Base):
     model = Column(String)
 
     slice = relationship(GMOSMOSSlice, backref='slice_wavecal')
-
-
