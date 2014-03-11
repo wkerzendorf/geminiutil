@@ -34,9 +34,9 @@ def calculate_slice_geometries(science_set, shift_bounds=[-20, 20], shift_sample
     slit_size_y = mdf_table['slitsize_my'].astype(np.float64) * units.mm * science_frame.instrument_setup.y_pix_per_mm
 
     #Added -1 offset to go to numpy counting and not iraf counting.
-    slice_lower_edge = (slit_pos_y  - slit_size_y/2 +
-                        science_frame.instrument_setup.y_offset).value - 1
-    slice_upper_edge = slice_lower_edge + slit_size_y.value
+
+    slice_lower_edge = (slit_pos_y  - slit_size_y/2 + science_frame.instrument_setup.y_offset).value - 1
+    slice_upper_edge = slice_lower_edge + slit_size_y.value - 1
 
 
     if science_set.flat is None:
