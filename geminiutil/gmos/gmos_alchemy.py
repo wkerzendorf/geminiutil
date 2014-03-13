@@ -631,6 +631,8 @@ class GMOSMOSPrepared(Base):
     def __repr__(self):
         return "<Prepared version of raw fits {0}>".format(self.raw_fits)
 
+
+
 class GMOSMOSScienceSet(Base):
     __tablename__ = 'gmos_mos_science_set'
 
@@ -659,7 +661,10 @@ class GMOSMOSScienceSet(Base):
                                           fit_sample=fit_sample)
 
 
-    def calculate_slice_geometries_to_database(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5, force=False):
+    def calculate_slice_geometries_to_database(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5, force=False, point_source_priorities=[0, 1, 2]):
+        """
+        Calculating the slice geometries (as done in calculate_slice_geometries)
+        """
         session = object_session(self)
         if session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).count() > 0:
             if not force:
@@ -676,36 +681,23 @@ class GMOSMOSScienceSet(Base):
         slices = []
         for i, line in enumerate(mdf_table):
             #adding slice
-            current_slice = GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
+            source_id = int(line['ID'])
+            priority = int(line['priority'])
+
+            current_slice = GMOSMOSSlice(list_id=i, object_id=source_id,
                                 slice_set_id=self.id, lower_edge=line['slice_lower_edge'],
                                 upper_edge=line['slice_upper_edge'])
             session.add(current_slice)
             session.commit()
-            # adding point_source if not exists
-            if session.query(gemini_alchemy.PointSource).filter_by(id=line['ID']).count() == 0:
-                logger.info('New point source found (ID={0}). Adding to Database')
-                current_point_source = gemini_alchemy.PointSource(id=line['ID'], ra=line['RA'], dec=line['DEC'])
-                session.add(current_point_source)
-                session.commit()
 
-            else:
-                #ensuring that the ra, dec entries in the database are the same as for the current object
-                current_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=line['ID']).one()
-                assert_almost_equal(line['RA'], current_point_source.ra)
-                assert_almost_equal(line['DEC'], current_point_source.dec)
-
-            current_mos_point_source = MOSPointSource(slice_id=current_slice.id,
-                                                      point_source_id=current_point_source.id,
-                                                      slit_position= line['specpos_y'].astype(np.float64) /
-                                                                     self.science.instrument_setup.y_binning)
-
-            session.add(current_mos_point_source)
-            session.commit()
-            slices.append(current_slice)
+            if priority in point_source_priorities:
+                current_slice._add_point_source(source_id, line['RA'], line['DEC'], current_slice.default_trace_position, priority)
 
         session.commit()
 
         return slices
+
+
 
 
 class GMOSMOSSlice(Base):
@@ -713,17 +705,15 @@ class GMOSMOSSlice(Base):
 
     id = Column(Integer, primary_key=True)
     list_id = Column(Integer)
-    object_id = Column(Integer)
-    priority = Column(Integer)
     slice_set_id = Column(Integer, ForeignKey('gmos_mos_science_set.id'))
     lower_edge = Column(Float)
     upper_edge = Column(Float)
 
     science_set = relationship(GMOSMOSScienceSet, backref='slices')
+    #mos_point_sources = relationship('MOSPointSource', secondary=mos_point_source2point_source, backref='slices')
 
     def __repr__(self):
-        return "<GMOS MOS Slice (priority=%d lower_edge=%.2f upper_edge=%.2f)>" % \
-               (self.priority, self.lower_edge, self.upper_edge)
+        return "<GMOS MOS Slice lower_edge={0:.2f} upper_edge={1:.2f})>".format(self.lower_edge, self.upper_edge)
 
 
     @property
@@ -743,6 +733,61 @@ class GMOSMOSSlice(Base):
     def default_trace_position(self):
         spec_pos_y = self.science_set.science.mask.table[self.list_id]['specpos_y'].astype(np.float64)
         return spec_pos_y / self.science_instrument_setup.y_binning
+
+    def _add_point_source(self, point_source_id, ra, dec, slit_position, priority):
+        """
+        Adding a point source from the current mask table line
+
+        Will create a new PointSource object with data about ra, dec
+        and a new MOSPointSource with data about slit_position and priority
+
+        If both these entries exist it will perform a sanity check
+
+        finally it will perform a sanity check
+
+        Parameters
+        ----------
+
+        point_source_id: int
+        ra: float
+        dec: float
+        slit_position: float
+        priority: int
+
+        """
+
+        session = object_session(self)
+
+        # adding point_source if not exists
+        if session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).count() == 0:
+            logger.info('New point source found (ID={0}). Adding to Database'.format(point_source_id))
+            current_point_source = gemini_alchemy.PointSource(id=point_source_id, ra=ra, dec=dec)
+            session.add(current_point_source)
+            session.commit()
+
+
+            current_mos_point_source = MOSPointSource(id=current_point_source.id,
+                                                      slit_position=slit_position,
+                                                      priority=priority)
+
+            session.add(current_mos_point_source)
+            session.commit()
+
+        else:
+            #ensuring that the ra, dec entries in the database are the same as for the current object
+            current_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).one()
+            assert_almost_equal(ra, current_point_source.ra)
+            assert_almost_equal(dec, current_point_source.dec)
+
+            #ensuring that the priority, slit_position_entries in the database are the same as for the current object
+            current_mos_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).one()
+
+            assert current_point_source.priority == priority
+            assert_almost_equal(current_mos_point_source.slit_position, slit_position)
+
+        current_mos_point_source.slices.append(self)
+
+
 
     def get_prepared_science_data(self):
         fits_data = self.prepared_science_fits_data
@@ -767,6 +812,7 @@ class GMOSMOSSlice(Base):
 
     def wavelength_calibrate_slice(self):
         pass
+
 class GMOSArcLamp(AbstractCalibrationFileTable):
     __tablename__ = 'gmos_arc_lamp'
 
@@ -883,7 +929,7 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
 
 
+
+
 from geminiutil.gmos.alchemy.mos import MOSPointSource
-
-
 

@@ -269,7 +269,7 @@ class PointSource(Base):
     name, ra, dec
     """
 
-    __tablename__ = 'point_source'
+    __tablename__ = 'point_sources'
 
     id = Column(Integer, primary_key=True)
     name = Column(String)
