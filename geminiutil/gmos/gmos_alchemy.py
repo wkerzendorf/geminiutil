@@ -18,6 +18,15 @@ from sqlalchemy import event
 from sqlalchemy.orm import relationship, backref, object_session
 from sqlalchemy import func
 
+#sqlalchemy types
+from sqlalchemy import String, Integer, Float, DateTime, Boolean
+
+from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
+from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
+from geminiutil.gmos.util.extraction import extract_spectrum
+
+
+
 from astropy.utils import misc
 from astropy import units as u
 
@@ -44,12 +53,6 @@ grating_eq_sorting = np.argsort(grating_eq)
 grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorting], tilt[grating_eq_sorting])
 import numpy as np
 
-#sqlalchemy types
-from sqlalchemy import String, Integer, Float, DateTime, Boolean
-
-from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
-from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
-from geminiutil.gmos.util.extraction import extract_spectrum
 
 class GMOSDatabaseDuplicate(Exception):
     pass
