@@ -263,6 +263,20 @@ class Instrument(Base, CategoryBaseClass):
         return "<Gemini Instrument %s>" % self.name
 
 
+class PointSource(Base):
+    """
+    Table describing a point source in the database. Currently only supports
+    name, ra, dec
+    """
+
+    __tablename__ = 'point_source'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    ra = Column(Float)
+    dec = Column(Float)
+
+
 class Operations(Base):
     __tablename__ = 'operations'
 
