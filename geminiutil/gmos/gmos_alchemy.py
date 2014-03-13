@@ -855,23 +855,8 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
 
-# standard decorator style
-@event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
-def receive_before_delete(mapper, connection, target):
-    logger.info('Deleting WaveCal file {0}'.format(target.full_path))
-    os.remove(target.full_path)
+
+from geminiutil.gmos.alchemy.mos import MOSPointSource
 
 
 
-
-class GMOSMOSSliceWaveCal(Base):
-    __tablename__ = 'gmos_mos_slice_wavecal'
-
-    id = Column(Integer, primary_key=True)
-    slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
-    wave_cal_type_id = Column(Integer, ForeignKey('wave_cal_type.id'))
-    raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
-    list_id = Column(Integer)
-    model = Column(String)
-
-    slice = relationship(GMOSMOSSlice, backref='slice_wavecal')
