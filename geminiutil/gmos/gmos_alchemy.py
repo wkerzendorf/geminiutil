@@ -32,6 +32,7 @@ from astropy import units as u
 
 from astropy import time, table
 
+from numpy.testing import assert_almost_equal
 import numpy as np
 
 import logging
@@ -669,13 +670,36 @@ class GMOSMOSScienceSet(Base):
 
         mdf_table = self.calculate_slice_geometries(shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
 
+
         slices = []
         for i, line in enumerate(mdf_table):
-            slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
+            #adding slice
+            current_slice = GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
                                 slice_set_id=self.id, lower_edge=line['slice_lower_edge'],
-                                upper_edge=line['slice_upper_edge']))
+                                upper_edge=line['slice_upper_edge'])
+            session.add(current_slice)
+            session.commit()
+            # adding point_source if not exists
+            if session.query(base.PointSource).filter_by(id=line['ID']).count() == 0:
+                logger.info('New point source found (ID={0}). Adding to Database')
+                current_point_source = base.PointSource(id=line['ID'], ra=line['RA'], dec=line['DEC'])
+                session.add(current_point_source)
+                session.commit()
 
-        session.add_all(slices)
+            else:
+                #ensuring that the ra, dec entries in the database are the same as for the current object
+                current_point_source = session.query(base.PointSource).filter_by(id=line['ID']).one()
+                assert_almost_equal(line['RA'], current_point_source.ra)
+                assert_almost_equal(line['DEC'], current_point_source.dec)
+
+            current_mos_point_source = MOSPointSource(slice_id=current_slice.id,
+                                                      point_source_id=current_point_source.id,
+                                                      slit_position= line['specpos_y'].astype(np.float64) /
+                                                                     self.science.instrument_setup.y_binning)
+            session.add(current_mos_point_source)
+            session.commit()
+            slices.append(current_slice)
+
         session.commit()
 
         return slices

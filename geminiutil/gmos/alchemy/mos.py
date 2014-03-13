@@ -19,7 +19,7 @@ class MOSPointSource(base.Base):
     id = Column(Integer, primary_key=True)
     point_source_id = Column(Integer, ForeignKey('point_source.id'))
     slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
-    slit_pos_y = Column(Float)
+    slit_position = Column(Float)
 
     point_source = relationship(base.PointSource, backref='mos_point_source')
 
