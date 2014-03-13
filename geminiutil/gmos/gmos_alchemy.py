@@ -11,6 +11,8 @@ from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, Abstract
 
 from .. import base
 
+from geminiutil.base import gemini_alchemy
+
 from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
 from sqlalchemy import event
@@ -680,15 +682,15 @@ class GMOSMOSScienceSet(Base):
             session.add(current_slice)
             session.commit()
             # adding point_source if not exists
-            if session.query(base.PointSource).filter_by(id=line['ID']).count() == 0:
+            if session.query(gemini_alchemy.PointSource).filter_by(id=line['ID']).count() == 0:
                 logger.info('New point source found (ID={0}). Adding to Database')
-                current_point_source = base.PointSource(id=line['ID'], ra=line['RA'], dec=line['DEC'])
+                current_point_source = gemini_alchemy.PointSource(id=line['ID'], ra=line['RA'], dec=line['DEC'])
                 session.add(current_point_source)
                 session.commit()
 
             else:
                 #ensuring that the ra, dec entries in the database are the same as for the current object
-                current_point_source = session.query(base.PointSource).filter_by(id=line['ID']).one()
+                current_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=line['ID']).one()
                 assert_almost_equal(line['RA'], current_point_source.ra)
                 assert_almost_equal(line['DEC'], current_point_source.dec)
 
@@ -696,6 +698,7 @@ class GMOSMOSScienceSet(Base):
                                                       point_source_id=current_point_source.id,
                                                       slit_position= line['specpos_y'].astype(np.float64) /
                                                                      self.science.instrument_setup.y_binning)
+
             session.add(current_mos_point_source)
             session.commit()
             slices.append(current_slice)
