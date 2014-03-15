@@ -51,6 +51,81 @@ class GMOSProject(BaseProject):
             except GMOSClassifyError:
                 logger.warning('Could not classify fits file {0}'.format(current_fits.fname))
 
+    def initialize_database(self, configuration_dir=None):
+        """
+        Initialize database
+        """
+        if configuration_dir is None:
+            configuration_dir = default_configuration_dir
+
+        self._initialize_gmos_filters(configuration_dir)
+        self._initialize_gmos_gratings(configuration_dir)
+        self._initialize_gmos_arcs(configuration_dir)
+
+    def _initialize_gmos_arcs(self, configuration_dir=None):
+        logger.info('Reading Arc information')
+        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat', path=os.path.join('gmos', 'arcs'))
+        self.session.add(cuar_arc)
+        self.session.commit()
+
+    def _initialize_gmos_filters(self, configuration_dir):
+        """
+        Read in GMOS filter/grating information, for matching to headers.
+        """
+        logger.info('Reading Filter information')
+
+        gmos_filters = np.recfromtxt(
+            os.path.join(configuration_dir, 'GMOSfilters.dat'),
+            names=['name', 'wave_start', 'wave_end', 'fname'])
+        for line in gmos_filters:
+            new_filter = GMOSFilter(name=line['name'],
+                                    wavelength_start_value=line['wave_start'],
+                                    wavelength_start_unit='nm',
+                                    wavelength_end_value=line['wave_end'],
+                                    wavelength_end_unit='nm',
+                                    fname=line['fname'],
+                                    path=os.path.join('gmos', 'filter_data'))
+            self.session.add(new_filter)
+
+        open_filter = GMOSFilter(name='open', wavelength_start_value=0,
+                                 wavelength_start_unit='nm',
+                                 wavelength_end_value=np.inf,
+                                 wavelength_end_unit='nm',
+                                 fname=None, path=None)
+        self.session.add(open_filter)
+
+    def _initialize_gmos_gratings(self, configuration_dir):
+        """
+        Add the GMOS grating information to the database
+        """
+        gmos_gratings = np.recfromtxt(
+            os.path.join(configuration_dir, 'GMOSgratings.dat'),
+            names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
+                     'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
+        logger.info('Reading grating information')
+        for line in gmos_gratings:
+            new_grating = GMOSGrating(
+                name=line['name'],
+                ruling_density_value=line['ruling_density'],
+                blaze_wavelength_value=line['blaze_wave'],
+                R=line['R'],
+                coverage_value=line['coverage'],
+                wavelength_start_value=line['wave_start'],
+                wavelength_end_value=line['wave_end'],
+                wavelength_offset_value=line['wave_offset'],
+                y_offset_value=line['y_offset'])
+            self.session.add(new_grating)
+
+        mirror = GMOSGrating(name='mirror',
+                             ruling_density_value=0.0,
+                             blaze_wavelength_value=0.0, R=0.0,
+                             coverage_value=np.inf,
+                             wavelength_start_value=0.0,
+                             wavelength_end_value=np.inf,
+                             wavelength_offset_value=0.0,
+                             y_offset_value=0.0)
+        self.session.add(mirror)
+        self.session.commit()
 
 
     def classify_gmos_raw_fits(self, fits_file):
@@ -121,10 +196,6 @@ class GMOSProject(BaseProject):
         self.session.commit()
         logger.info('Added GMOS MDF %s', fits_object.fname)
         return gmos_mask
-
-
-
-
 
 class GMOSMOSProject(GMOSProject):
     """GMOS multi-object spectroscopy project.
@@ -318,72 +389,3 @@ class GMOSMOSProject(GMOSProject):
         self.link_longslit_arcs()
         self.link_science_sets()
 
-    def initialize_database(self, configuration_dir=None):
-        """Read in GMOS filter/grating information, for matching to headers."""
-        if configuration_dir is None:
-            configuration_dir = default_configuration_dir
-
-        self._initialize_gmos_filters(configuration_dir)
-        self._initialize_gmos_gratings(configuration_dir)
-        self._initialize_gmos_arcs(configuration_dir)
-
-    def _initialize_gmos_arcs(self, configuration_dir=None):
-        logger.info('Reading Arc information')
-        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat',
-                               path=os.path.join('gmos', 'arcs'))
-        self.session.add(cuar_arc)
-        self.session.commit()
-
-    def _initialize_gmos_filters(self, configuration_dir):
-
-        logger.info('Reading Filter information')
-
-        gmos_filters = np.recfromtxt(
-            os.path.join(configuration_dir, 'GMOSfilters.dat'),
-            names=['name', 'wave_start', 'wave_end', 'fname'])
-        for line in gmos_filters:
-            new_filter = GMOSFilter(name=line['name'],
-                                    wavelength_start_value=line['wave_start'],
-                                    wavelength_start_unit='nm',
-                                    wavelength_end_value=line['wave_end'],
-                                    wavelength_end_unit='nm',
-                                    fname=line['fname'],
-                                    path=os.path.join('gmos', 'filter_data'))
-            self.session.add(new_filter)
-
-        open_filter = GMOSFilter(name='open', wavelength_start_value=0,
-                                 wavelength_start_unit='nm',
-                                 wavelength_end_value=np.inf,
-                                 wavelength_end_unit='nm',
-                                 fname=None, path=None)
-        self.session.add(open_filter)
-
-    def _initialize_gmos_gratings(self, configuration_dir):
-        gmos_gratings = np.recfromtxt(
-            os.path.join(configuration_dir, 'GMOSgratings.dat'),
-            names=['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
-                   'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
-        logger.info('Reading grating information')
-        for line in gmos_gratings:
-            new_grating = GMOSGrating(
-                name=line['name'],
-                ruling_density_value=line['ruling_density'],
-                blaze_wavelength_value=line['blaze_wave'],
-                R=line['R'],
-                coverage_value=line['coverage'],
-                wavelength_start_value=line['wave_start'],
-                wavelength_end_value=line['wave_end'],
-                wavelength_offset_value=line['wave_offset'],
-                y_offset_value=line['y_offset'])
-            self.session.add(new_grating)
-
-        mirror = GMOSGrating(name='mirror',
-                             ruling_density_value=0.0,
-                             blaze_wavelength_value=0.0, R=0.0,
-                             coverage_value=np.inf,
-                             wavelength_start_value=0.0,
-                             wavelength_end_value=np.inf,
-                             wavelength_offset_value=0.0,
-                             y_offset_value=0.0)
-        self.session.add(mirror)
-        self.session.commit()
