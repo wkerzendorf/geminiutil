@@ -7,8 +7,7 @@ The documentation for `geminiutil`
     :maxdepth: 1
 
     general
-    initializing
-    exploring
-    reduction
+    gmos/index
+
 
 
