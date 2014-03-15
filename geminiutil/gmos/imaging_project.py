@@ -1,8 +1,7 @@
-from geminiutil.base.base_project import BaseProject
+from geminiutil.gmos.gmos_project import GMOSProject
 
-
-class GMOSImagingProject(BaseProject):
+class GMOSImagingProject(GMOSProject):
     """
-
+    TBD
     """
-
+    pass
