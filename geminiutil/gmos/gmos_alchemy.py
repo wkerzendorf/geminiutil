@@ -57,39 +57,6 @@ grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorti
 import numpy as np
 
 
-class GMOSMask(Base):
-    __tablename__ = 'gmos_mask'
-
-
-    # GMOSMasks don't have the fits_id as the primary key anymore.
-    #The reason for this change is that for a longslit exposure there exists no mask exposure.
-
-    id = Column(Integer, primary_key=True)
-    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
-    name = Column(String)
-    program_id = Column(Integer, ForeignKey('program.id'))
-
-    fits = relationship(base.FITSFile)
-
-    @misc.lazyproperty
-    def table(self):
-        return self.fits.data
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        mask_name = fits_object.header['DATALAB'].lower().strip()
-        mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
-        mask_object = cls(mask_name, mask_program.id)
-        mask_object.fits_id = fits_object.id
-        return mask_object
-
-
-
-    def __init__(self, name, program_id):
-        self.name = name
-        self.program_id = program_id
-
 
 class GMOSDetector(Base):
     __tablename__ = 'gmos_detector'
@@ -503,6 +470,8 @@ class GMOSMOSInstrumentSetup(Base):
                 self.grating_central_wavelength_unit)
 
 class GMOSMOSRawFITS(AbstractGMOSRawFITS):
+    __tablename__ = 'gmos_mos_raw_fits'
+
     def prepare_to_database(self, prepare_function=None, destination_dir='.', force=False):
 
         session = object_session(self)

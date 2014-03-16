@@ -1,13 +1,12 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
-import geminiutil
-# following not yet used
-# from geminiutil.base.gemini_alchemy import AbstractFileTable
-# from .gmos_alchemy import GMOSDetector
-from .gmos_alchemy import (GMOSMOSRawFITS, GMOSMask, GMOSFilter,
-                           GMOSGrating, GMOSMOSInstrumentSetup,
-                           GMOSMOSScienceSet, GMOSArcLamp,
-                           GMOSLongSlitArc)
+
+from geminiutil.base.gemini_alchemy import AbstractFileTable
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetector, \
+    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
+
+from geminiutil.gmos.alchemy.base import GMOSMask
+
 import logging
 from sqlalchemy import func
 
@@ -16,7 +15,7 @@ from astropy import time
 import numpy as np
 import re
 import os
-
+import geminiutil
 
 logger = logging.getLogger(__name__)
 
