@@ -58,6 +58,9 @@ class BaseProject(object):
         """Names of observation types in the database (e.g., 'science')."""
         return zip(*self.session.query(base_alchemy.ObservationType.name).all())[0]
 
+    def __dir__(self):
+
+        return self.__dict__.keys() + list(self.observation_classes) + list(self.observation_types)
 
     def download_raw_fits(self, fname, username, password, raw_directory='raw', chunk_size=1024):
         """

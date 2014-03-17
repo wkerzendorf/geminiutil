@@ -99,35 +99,35 @@ class AbstractGMOSRawFITS(gemini_alchemy.Base):
 
     @declared_attr
     def fits(cls):
-        return relationship(gemini_alchemy.FITSFile, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.FITSFile, uselist=False)
 
     @declared_attr
     def instrument(cls):
-        return relationship(gemini_alchemy.Instrument, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.Instrument, uselist=False)
 
     @declared_attr
     def observation_block(cls):
-        return relationship(gemini_alchemy.ObservationBlock, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.ObservationBlock, uselist=False)
 
     @declared_attr
     def observation_class(cls):
-        return relationship(gemini_alchemy.ObservationClass, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.ObservationClass, uselist=False)
 
     @declared_attr
     def observation_type(cls):
-        return relationship(gemini_alchemy.ObservationType, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.ObservationType, uselist=False)
 
     @declared_attr
     def object(cls):
-        return relationship(gemini_alchemy.Object, uselist=False, backref='raw_fits')
+        return relationship(gemini_alchemy.Object, uselist=False)
 
     @declared_attr
     def mask(cls):
-        return relationship(GMOSMask, uselist=False, backref='raw_fits')
+        return relationship(GMOSMask, uselist=False)
 
     @declared_attr
     def instrument_setup(cls):
-        return relationship('GMOSMOSInstrumentSetup', backref='raw_fits')
+        return relationship('GMOSMOSInstrumentSetup')
 
 
     @property

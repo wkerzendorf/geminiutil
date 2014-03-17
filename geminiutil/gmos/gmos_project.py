@@ -32,6 +32,23 @@ class GMOSClassifyError(ValueError):
 
 class GMOSProject(BaseProject):
 
+
+    def __getattr__(self, item):
+        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
+            return self.session.query(self.raw_fits_class).join(ObservationType).\
+                filter(ObservationType.name==item.replace('_query', ''))
+        elif item in self.observation_types:
+            return self.__getattr__(item+'_query').all()
+
+        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
+            return self.session.query(self.raw_fits_class).join(ObservationClass).\
+                filter(ObservationClass.name==item.replace('_query', ''))
+
+        elif item in self.observation_classes:
+            return self.__getattr__(item+'_query').all()
+        else:
+            return self.__getattribute__(item)
+
     def classify_added_fits(self, current_fits):
         """
         Classify added FITS objects
@@ -248,21 +265,6 @@ class GMOSMOSProject(GMOSProject):
         return self.session.query(GMOSMOSInstrumentSetup).join(GMOSMOSRawFITS).join(ObservationType).join(GMOSMask)\
         .filter(ObservationType.name == 'arc', GMOSMask.name.like('%arcsec')).all()
 
-    def __getattr__(self, item):
-        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationType).\
-                filter(ObservationType.name==item.replace('_query', ''))
-        elif item in self.observation_types:
-            return self.__getattr__(item+'_query').all()
-
-        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).\
-                filter(ObservationClass.name==item.replace('_query', ''))
-
-        elif item in self.observation_classes:
-            return self.__getattr__(item+'_query').all()
-        else:
-            return self.__getattribute__(item)
 
     def link_masks(self):
         """For each MOS observation, link it to the corresponding mask file."""
