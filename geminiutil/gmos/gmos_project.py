@@ -145,7 +145,7 @@ class GMOSMOSProject(BaseProject):
             return
 
         object = base.Object.from_fits_object(fits_file)
-        # not yet used: program = base.Program.from_fits_object(fits_file)
+        program = base.Program.from_fits_object(fits_file)
         observation_block = base.ObservationBlock.from_fits_object(fits_file)
         observation_class = base.ObservationClass.from_fits_object(fits_file)
         observation_type = base.ObservationType.from_fits_object(fits_file)
