@@ -23,11 +23,11 @@ from sqlalchemy import func
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
-from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
 from geminiutil.gmos.util.extraction import extract_spectrum
+from geminiutil.gmos.alchemy.base import AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError
 
-
+from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 
 from astropy.utils import misc
 from astropy import units as u
@@ -56,46 +56,6 @@ grating_eq_sorting = np.argsort(grating_eq)
 grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorting], tilt[grating_eq_sorting])
 import numpy as np
 
-
-class GMOSDatabaseDuplicate(Exception):
-    pass
-
-class GMOSNotPreparedError(Exception):
-    #raised if a prepared fits is needed but none found for certain tasks
-    pass
-
-class GMOSMask(Base):
-    __tablename__ = 'gmos_mask'
-
-
-    # GMOSMasks don't have the fits_id as the primary key anymore.
-    #The reason for this change is that for a longslit exposure there exists no mask exposure.
-
-    id = Column(Integer, primary_key=True)
-    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
-    name = Column(String)
-    program_id = Column(Integer, ForeignKey('program.id'))
-
-    fits = relationship(base.FITSFile)
-
-    @misc.lazyproperty
-    def table(self):
-        return self.fits.data
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        mask_name = fits_object.header['DATALAB'].lower().strip()
-        mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
-        mask_object = cls(mask_name, mask_program.id)
-        mask_object.fits_id = fits_object.id
-        return mask_object
-
-
-
-    def __init__(self, name, program_id):
-        self.name = name
-        self.program_id = program_id
 
 
 class GMOSDetector(Base):
@@ -509,68 +469,8 @@ class GMOSMOSInstrumentSetup(Base):
                 (self.id, self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
                 self.grating_central_wavelength_unit)
 
-
-class GMOSMOSRawFITS(Base):
+class GMOSMOSRawFITS(AbstractGMOSRawFITS):
     __tablename__ = 'gmos_mos_raw_fits'
-
-    id = Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
-    mjd = Column(Float)
-    instrument_id = Column(Integer, ForeignKey('instrument.id'))
-    observation_block_id = Column(Integer, ForeignKey('observation_block.id'))
-    observation_class_id = Column(Integer, ForeignKey('observation_class.id'))
-    observation_type_id = Column(Integer, ForeignKey('observation_type.id'))
-    object_id = Column(Integer, ForeignKey('object.id'))
-    mask_id = Column(Integer, ForeignKey('gmos_mask.id'))
-
-
-    instrument_setup_id = Column(Integer, ForeignKey('gmos_mos_instrument_setup.id'))
-
-    exclude = Column(Boolean)
-
-
-    fits = relationship(FITSFile, uselist=False, backref='raw_fits')
-    instrument = relationship(Instrument, uselist=False, backref='raw_fits')
-    observation_block = relationship(ObservationBlock, uselist=False, backref='raw_fits')
-    observation_class = relationship(ObservationClass, uselist=False, backref='raw_fits')
-    observation_type = relationship(ObservationType, uselist=False, backref='raw_fits')
-    object = relationship(base.Object, uselist=False, backref='raw_fits')
-    mask = relationship(GMOSMask, uselist=False, backref='raw_fits')
-
-    instrument_setup = relationship(GMOSMOSInstrumentSetup, backref='raw_fits')
-
-
-    @property
-    def associated_query(self):
-        session = object_session(self)
-        return session.query(GMOSMOSRawFITS).filter_by(observation_block_id=self.observation_block_id)
-
-    @property
-    def associated(self):
-        return self.associated_query.all()
-
-    @property
-    def date_obs(self):
-        return time.Time(self.mjd, scale='utc', format='mjd')
-
-    def __init__(self, mjd, instrument_id, observation_block_id, observation_class_id, observation_type_id,
-                 object_id, mask_id=None, instrument_setup_id=None, exclude=False):
-        self.mjd = mjd
-        self.instrument_id = instrument_id
-        self.observation_block_id = observation_block_id
-        self.observation_class_id = observation_class_id
-        self.observation_type_id = observation_type_id
-        self.exclude = exclude
-
-        self.mask_id = mask_id
-        self.object_id = object_id
-        self.instrument_setup_id = instrument_setup_id
-
-    def __repr__(self):
-        return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'.format(self.id,
-                                                                                        self.fits.fname,
-                                                                                        self.observation_class.name,
-                                                                                        self.observation_type.name,
-                                                                                        self.object.name)
 
     def prepare_to_database(self, prepare_function=None, destination_dir='.', force=False):
 
@@ -584,10 +484,6 @@ class GMOSMOSRawFITS(Base):
                 session.delete(self.prepared)
                 session.commit()
 
-        if prepare_function is None:
-            logger.debug('no prepare function given - using defaults')
-            prepare_function = GMOSPrepareFrame()
-
         prepared_fits = self.prepare(prepare_function=prepare_function)
 
         prepared_fname = '{0}-{1}'.format(prepare_function.file_prefix, self.fits.fname)
@@ -597,7 +493,7 @@ class GMOSMOSRawFITS(Base):
         prepared_fits.writeto(prepared_full_path, clobber=True)
 
         # read it back in and add to database
-        fits_file = FITSFile.from_fits_file(prepared_full_path)
+        fits_file = gemini_alchemy.FITSFile.from_fits_file(prepared_full_path)
 
 
         session.add(fits_file)
@@ -617,6 +513,7 @@ class GMOSMOSRawFITS(Base):
 
         prepared_fits = prepare_function(self)
         return prepared_fits
+
 
 class GMOSMOSPrepared(Base):
     __tablename__ = 'gmos_mos_prepared'
