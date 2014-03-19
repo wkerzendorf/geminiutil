@@ -1,8 +1,13 @@
 from .. import base
 from ..base import BaseProject, ObservationClass, ObservationType
-from geminiutil.base.gemini_alchemy import AbstractFileTable
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSMask, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
+import geminiutil
+# following not yet used
+# from geminiutil.base.gemini_alchemy import AbstractFileTable
+# from .gmos_alchemy import GMOSDetector
+from .gmos_alchemy import (GMOSMOSRawFITS, GMOSMask, GMOSFilter,
+                           GMOSGrating, GMOSMOSInstrumentSetup,
+                           GMOSMOSScienceSet, GMOSArcLamp,
+                           GMOSLongSlitArc)
 import logging
 from sqlalchemy import func
 
@@ -15,10 +20,13 @@ import os
 
 logger = logging.getLogger(__name__)
 
-default_configuration_dir = os.path.join(os.path.dirname(__file__), 'data')
+default_configuration_dir = os.path.join(geminiutil.__path__[0],
+                                         'data', 'gmos')
+
 
 class GMOSDBError(ValueError):
     pass
+
 
 class GMOSMOSProject(BaseProject):
     """GMOS multi-object spectroscopy project.
@@ -28,7 +36,6 @@ class GMOSMOSProject(BaseProject):
     Start/restart a project with a given database that holds information
     about all observations
 
-    >>> import geminiutil.base as base
     >>> from geminiutil.gmos.gmos_project import GMOSMOSProject
     >>> proj = GMOSMOSProject('sqlite:///mcsnr.db3')
 
@@ -40,7 +47,7 @@ class GMOSMOSProject(BaseProject):
 
     >>> proj.add_directory('/raw/mhvk/gemini/mcsnr', file_filter='S*S*.fits')
 
-    Now, can get sets of relevant files.  E.g., 
+    Now, can get sets of relevant files.  E.g.,
 
     >>> print proj.observation_classes
     (u'daycal', u'acq', u'science', u'partnercal', u'acqcal', u'progcal')
@@ -53,7 +60,7 @@ class GMOSMOSProject(BaseProject):
     """
 
     def __init__(self, database_string, work_dir, echo=False):
-        super(GMOSMOSProject, self).__init__(database_string, work_dir, 
+        super(GMOSMOSProject, self).__init__(database_string, work_dir,
                                              GMOSMOSRawFITS, echo=echo)
 
     @property
@@ -63,32 +70,42 @@ class GMOSMOSProject(BaseProject):
     #showing the different setups for science exposures
     @property
     def science_instrument_setups(self):
-        return self.session.query(GMOSMOSInstrumentSetup).join(GMOSMOSRawFITS)\
-            .join(ObservationClass).filter(ObservationClass.name == 'science').all()
+        return (self.session.query(GMOSMOSInstrumentSetup)
+                .join(GMOSMOSRawFITS)
+                .join(ObservationClass)
+                .filter(ObservationClass.name == 'science')
+                .all())
 
     #showing the different setups for longslit_arcs
     @property
     def longslit_arcs_instrument_setups(self):
-        return self.session.query(GMOSMOSInstrumentSetup).join(GMOSMOSRawFITS).join(ObservationType).join(GMOSMask)\
-        .filter(ObservationType.name == 'arc', GMOSMask.name.like('%arcsec')).all()
+        return (self.session.query(GMOSMOSInstrumentSetup)
+                .join(GMOSMOSRawFITS).join(ObservationType).join(GMOSMask)
+                .filter(ObservationType.name == 'arc',
+                        GMOSMask.name.like('%arcsec'))
+                .all())
 
     def __getattr__(self, item):
-        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationType).\
-                filter(ObservationType.name==item.replace('_query', ''))
+        if(item.endswith('_query') and
+           item.replace('_query', '') in self.observation_types):
+            return (self.session.query(GMOSMOSRawFITS)
+                    .join(ObservationType)
+                    .filter(ObservationType.name ==
+                            item.replace('_query', '')))
         elif item in self.observation_types:
             return self.__getattr__(item+'_query').all()
 
-        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
-            return self.session.query(GMOSMOSRawFITS).join(ObservationClass).\
-                filter(ObservationClass.name==item.replace('_query', ''))
+        elif (item.endswith('_query') and
+              item.replace('_query', '') in self.observation_classes):
+            return (self.session.query(GMOSMOSRawFITS)
+                    .join(ObservationClass)
+                    .filter(ObservationClass.name ==
+                            item.replace('_query', '')))
 
         elif item in self.observation_classes:
             return self.__getattr__(item+'_query').all()
         else:
             return self.__getattribute__(item)
-
-
 
     def classify_added_fits(self, current_fits):
         """
@@ -108,34 +125,33 @@ class GMOSMOSProject(BaseProject):
             fits_object = self.add_gmos_mask(current_fits)
 
         if fits_object is None:
-            logger.warning('Could not classify fits file %s', 
+            logger.warning('Could not classify fits file %s',
                            current_fits.fname)
         return fits_object
         #self.add_gmos_mask(self)
 
     def add_gmos_raw_fits(self, fits_file):
-        required_categories = [base.Object, base.Program, 
-                               base.ObservationBlock, base.ObservationClass, 
+        required_categories = [base.Object, base.Program,
+                               base.ObservationBlock, base.ObservationClass,
                                base.ObservationType, base.Instrument]
 
-        required_keywords = [item.category_keyword 
+        required_keywords = [item.category_keyword
                              for item in required_categories] + ['date-obs']
 
-        if not all([keyword in fits_file.header 
+        if not all([keyword in fits_file.header
                     for keyword in required_keywords]):
-            logger.debug("%s is not a normal raw gmos fits file", 
+            logger.debug("%s is not a normal raw gmos fits file",
                          fits_file.fname)
             return
 
         object = base.Object.from_fits_object(fits_file)
-        program = base.Program.from_fits_object(fits_file)
+        # not yet used: program = base.Program.from_fits_object(fits_file)
         observation_block = base.ObservationBlock.from_fits_object(fits_file)
         observation_class = base.ObservationClass.from_fits_object(fits_file)
         observation_type = base.ObservationType.from_fits_object(fits_file)
         instrument = base.Instrument.from_fits_object(fits_file)
 
-
-        if len(fits_file.fits_data) == 4 or len(fits_file.fits_data) ==  7:
+        if len(fits_file.fits_data) == 4 or len(fits_file.fits_data) == 7:
             instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(
                 fits_file).id
         else:
@@ -143,7 +159,7 @@ class GMOSMOSProject(BaseProject):
                         '(expecting either 4 or 7)', len(fits_file.fits_data))
             instrument_setup_id = None
 
-        date_obs_str = '%sT%s' % (fits_file.header['date-obs'], 
+        date_obs_str = '%sT%s' % (fits_file.header['date-obs'],
                                   fits_file.header['time-obs'])
         mjd = time.Time(date_obs_str, scale='utc').mjd
 
@@ -161,14 +177,12 @@ class GMOSMOSProject(BaseProject):
 
         return gmos_raw
 
-
-
     def add_gmos_mask(self, fits_object):
         required_keywords = ['GEMPRGID', 'OBSTYPE', 'ODFNAME']
-        if not all([keyword in fits_object.header 
-                    for keyword in required_keywords]) and \
-                    fits_object.header['OBSTYPE'].lower().strip() != 'mask':
-            logger.debug("%s is not a normal gemini mask file" % 
+        if(not all([keyword in fits_object.header
+                    for keyword in required_keywords]) and
+           fits_object.header['OBSTYPE'].lower().strip() != 'mask'):
+            logger.debug("%s is not a normal gemini mask file" %
                          fits_object.fname)
             return None
 
@@ -185,7 +199,7 @@ class GMOSMOSProject(BaseProject):
             slit_mask_pattern = re.compile('G[SN]\d{4}.+')
             longslit_mask_pattern = re.compile('(\d+)\.(\d+)arcsec')
             if gmos_raw.mask_id is not None:
-                logger.debug('Mask is already set for %s - moving on', 
+                logger.debug('Mask is already set for %s - moving on',
                              gmos_raw.fits.fname)
                 continue
             mask_name = gmos_raw.fits.header['maskname']
@@ -195,11 +209,11 @@ class GMOSMOSProject(BaseProject):
                 if self.session.query(GMOSMask).filter_by(
                         name=mask_name.strip().lower()).count() == 0:
                     program_id = self.session.query(base.Program).filter_by(
-                        name=gmos_raw.fits.header['GEMPRGID'].lower().strip()).one().id
+                        name=(gmos_raw.fits.header['GEMPRGID']
+                              .lower().strip())).one().id
                     longslit_placeholder_mask = GMOSMask(mask_name, program_id)
                     self.session.add(longslit_placeholder_mask)
                     self.session.commit()
-
 
             elif slit_mask_pattern.match(mask_name) is None:
                 logger.warn('%s (in %s) doesn\'t seem to be a valid maskname',
@@ -223,57 +237,77 @@ class GMOSMOSProject(BaseProject):
                     name=mask_name.strip().lower()).one()
                 gmos_raw.mask_id = mask.id
 
-
         self.session.commit()
 
     def link_longslit_arcs(self):
         logger.info('Linking Longslit Arcs')
 
-        for longslit_arc in self.arc_query.join(GMOSMask).filter(GMOSMask.name.like('%arcsec')).all():
-            current_arc_lamp = self.session.query(GMOSArcLamp).filter_by(name=longslit_arc.fits.header['GCALLAMP'].lower()).one()
-            gmos_longslit_arc = GMOSLongSlitArc(id=longslit_arc.id, arc_lamp_id=current_arc_lamp.id)
+        for longslit_arc in self.arc_query.join(GMOSMask).filter(
+                GMOSMask.name.like('%arcsec')).all():
+            current_arc_lamp = self.session.query(GMOSArcLamp).filter_by(
+                name=longslit_arc.fits.header['GCALLAMP'].lower()).one()
+            gmos_longslit_arc = GMOSLongSlitArc(
+                id=longslit_arc.id, arc_lamp_id=current_arc_lamp.id)
             self.session.add(gmos_longslit_arc)
 
         self.session.commit()
 
-
     def link_science_sets(self):
         """
-        Linking individual science observations (single fits files) to its calibration data
+        Link individual science observations to their calibration data
 
         Parameters
         ----------
 
         science_instrument2longslit_instrument: ~np.recarray
-            a dictionary mapping science_frame instrument_setup_id -> longslit_arc_instrument_setup_id
+            a dictionary mapping science_frame instrument_setup_id to
+            longslit_arc_instrument_setup_id
         """
 
-        science_frames = self.session.query(GMOSMOSRawFITS).join(ObservationType).join(ObservationClass)\
-            .filter(ObservationClass.name=='science', ObservationType.name=='object').all()
+        science_frames = (self.session.query(GMOSMOSRawFITS)
+                          .join(ObservationType).join(ObservationClass)
+                          .filter(ObservationClass.name == 'science',
+                                  ObservationType.name == 'object')
+                          .all())
         for science_frame in science_frames:
-            flat = self.session.query(GMOSMOSRawFITS)\
-                .join(ObservationType).filter(ObservationType.name=='flat',
-                                              GMOSMOSRawFITS.mask_id==science_frame.mask_id,
-                                              GMOSMOSRawFITS.observation_block_id==science_frame.observation_block_id)\
-                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).all()
+            flat = (self.session.query(GMOSMOSRawFITS)
+                    .join(ObservationType)
+                    .filter(ObservationType.name == 'flat',
+                            GMOSMOSRawFITS.mask_id == science_frame.mask_id,
+                            GMOSMOSRawFITS.observation_block_id ==
+                            science_frame.observation_block_id)
+                    .order_by(func.abs(GMOSMOSRawFITS.mjd -
+                                       science_frame.mjd))
+                    .all())
 
             #### WRONG - just picking one flat for now ###
             flat = flat[0]
 
-            mask_arc = self.session.query(GMOSMOSRawFITS)\
-                .join(ObservationType).join(ObservationClass)\
-                .filter(ObservationType.name=='arc', GMOSMOSRawFITS.mask_id==science_frame.mask_id,
-                        GMOSMOSRawFITS.instrument_setup_id==science_frame.instrument_setup_id)\
-                .order_by(func.abs(GMOSMOSRawFITS.mjd - science_frame.mjd)).all()
+            mask_arc = (self.session.query(GMOSMOSRawFITS)
+                        .join(ObservationType).join(ObservationClass)
+                        .filter(
+                            ObservationType.name == 'arc',
+                            GMOSMOSRawFITS.mask_id == science_frame.mask_id,
+                            GMOSMOSRawFITS.instrument_setup_id ==
+                            science_frame.instrument_setup_id)
+                        .order_by(func.abs(GMOSMOSRawFITS.mjd -
+                                           science_frame.mjd))
+                        .all())
 
             if len(mask_arc) != 1:
-                logger.warn('Science Frame {0} has more than one mask arc:\n{1} - selecting closest arc'.format(science_frame, '\n'.join(map(str, mask_arc))))
+                logger.warn('Science Frame {0} has more than one mask arc:\n'
+                            '{1} - selecting closest arc'
+                            .format(science_frame,
+                                    '\n'.join(map(str, mask_arc))))
             mask_arc = mask_arc[0]
 
-            self.session.add(GMOSMOSScienceSet(id=science_frame.id, flat_id=flat.id, mask_arc_id=mask_arc.id,))
-            logger.info('Link Science Frame {0} with:\nFlat: {1}\nMask Arc: {2}\n'.format(science_frame, flat, mask_arc))
+            self.session.add(GMOSMOSScienceSet(id=science_frame.id,
+                                               flat_id=flat.id,
+                                               mask_arc_id=mask_arc.id,))
+            logger.info('Link Science Frame {0} with:\nFlat: {1}\n'
+                        'Mask Arc: {2}\n'
+                        .format(science_frame, flat, mask_arc))
         self.session.commit()
-
 
     def link_database(self):
         """
@@ -282,7 +316,6 @@ class GMOSMOSProject(BaseProject):
         self.link_masks()
         self.link_longslit_arcs()
         self.link_science_sets()
-
 
     def initialize_database(self, configuration_dir=None):
         """Read in GMOS filter/grating information, for matching to headers."""
@@ -295,7 +328,8 @@ class GMOSMOSProject(BaseProject):
 
     def _initialize_gmos_arcs(self, configuration_dir=None):
         logger.info('Reading Arc information')
-        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat', path=os.path.join('gmos', 'arcs'))
+        cuar_arc = GMOSArcLamp(name='cuar', fname='CuAr.dat',
+                               path=os.path.join('gmos', 'arcs'))
         self.session.add(cuar_arc)
         self.session.commit()
 
@@ -326,8 +360,8 @@ class GMOSMOSProject(BaseProject):
     def _initialize_gmos_gratings(self, configuration_dir):
         gmos_gratings = np.recfromtxt(
             os.path.join(configuration_dir, 'GMOSgratings.dat'),
-            names = ['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
-                     'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
+            names=['name', 'ruling_density', 'blaze_wave', 'R', 'coverage',
+                   'wave_start', 'wave_end', 'wave_offset', 'y_offset'])
         logger.info('Reading grating information')
         for line in gmos_gratings:
             new_grating = GMOSGrating(
