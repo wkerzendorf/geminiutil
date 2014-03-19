@@ -485,8 +485,9 @@ class GMOSMOSRawFITS(AbstractGMOSRawFITS):
                 session.commit()
 
         prepared_fits = self.prepare(prepare_function=prepare_function)
-
-        prepared_fname = '{0}-{1}'.format(prepare_function.file_prefix, self.fits.fname)
+        prepared_fname = (prepare_function.file_prefix if prepare_function
+                          else GMOSPrepareFrame.file_prefix)
+        prepared_fname = '{0}-{1}'.format(prepared_fname, self.fits.fname)
 
         prepared_full_path = os.path.join(destination_dir, prepared_fname)
 
@@ -581,9 +582,9 @@ class GMOSMOSScienceSet(Base):
             source_id = int(line['ID'])
             priority = int(line['priority'])
 
-            current_slice = GMOSMOSSlice(list_id=i, object_id=source_id,
-                                slice_set_id=self.id, lower_edge=line['slice_lower_edge'],
-                                upper_edge=line['slice_upper_edge'])
+            current_slice = GMOSMOSSlice(list_id=i, slice_set_id=self.id,
+                                         lower_edge=line['slice_lower_edge'],
+                                         upper_edge=line['slice_upper_edge'])
             session.add(current_slice)
             session.commit()
 
@@ -829,4 +830,3 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
 
 
 from geminiutil.gmos.alchemy.mos import MOSPointSource
-
