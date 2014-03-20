@@ -188,7 +188,7 @@ class BaseProject(object):
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        current_raw_fits = raw_fits_class(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
+        current_raw_fits = self.raw_fits_class(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
         current_raw_fits.id = fits_file.id
 
         self.session.add(current_raw_fits)
