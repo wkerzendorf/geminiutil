@@ -1,5 +1,5 @@
 from geminiutil.base.gemini_alchemy import Base, FITSFile, Instrument, Program, \
-    ObservationBlock, ObservationClass, ObservationType, AbstractFileTable
+    ObservationBlock, ObservationClass, ObservationType, DataPathMixin
 
 from geminiutil.base import gemini_alchemy as base_alchemy
 
@@ -43,7 +43,8 @@ class BaseProject(object):
         if not os.path.exists(work_dir):
             raise ValueError('Working directory {0} does not exist'.format(work_dir))
 
-        AbstractFileTable.work_dir = work_dir
+        DataPathMixin.work_dir = work_dir
+
 
         self.work_dir = work_dir
 

@@ -1,1 +1,1 @@
-__author__ = 'wkerzend'
+#package for the general gemini related alchemy
