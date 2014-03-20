@@ -26,7 +26,7 @@ from sqlalchemy import func
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 
 from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
-from geminiutil.gmos.util.extraction import extract_spectrum
+from geminiutil.gmos.util.extraction import extract_spectrum, extract_arc
 from geminiutil.gmos.alchemy.base import AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError
 
 from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
@@ -726,7 +726,10 @@ class GMOSMOSSlice(Base):
     def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
         return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
 
-    def wavelength_calibrate_slice(self):
+    def extract_arc(self, extracted_spectrum):
+        return extract_arc(self, extracted_spectrum=extracted_spectrum)
+
+    def wavelength_calibrate_arc(self, extracted_spectrum, model_arc):
         pass
 
 class GMOSArcLamp(AbstractCalibrationFileTable):
