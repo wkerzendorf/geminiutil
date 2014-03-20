@@ -678,9 +678,9 @@ class GMOSMOSSlice(Base):
             assert_almost_equal(dec, current_point_source.dec)
 
             #ensuring that the priority, slit_position_entries in the database are the same as for the current object
-            current_mos_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).one()
+            current_mos_point_source = session.query(MOSPointSource).filter_by(id=point_source_id).one()
 
-            assert current_point_source.priority == priority
+            assert current_mos_point_source.priority == priority
             assert_almost_equal(current_mos_point_source.slit_position, slit_position)
 
         current_mos_point_source.slices.append(self)
