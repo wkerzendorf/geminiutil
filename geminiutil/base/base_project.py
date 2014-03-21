@@ -116,8 +116,6 @@ class BaseProject(object):
                 else:
                     file_type = 'fits'
 
-                print file_type
-                
                 if file_type == 'fits':
                     assert url_request.headers['content-encoding'] == 'gzip'
                     assert url_request.headers['content-type'] == 'application/fits'
