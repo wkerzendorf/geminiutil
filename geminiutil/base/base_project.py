@@ -12,7 +12,9 @@ import logging
 
 import re
 
-http_header_disposition = re.compile('^inline; filename=(.+\.fits)\.gz')
+http_header_disposition_fitsgz = re.compile('^inline; filename=(.+\.fits)\.gz')
+http_header_disposition_gz = re.compile('^inline; filename=(.+)\.gz')
+http_header_disposition = re.compile('^inline; filename=(.+)\.gz')
 
 logger = logging.getLogger(__name__)
 
@@ -101,17 +103,30 @@ class BaseProject(object):
         with open(fname) as cadc_fh:
             for line in cadc_fh:
                 url_request = requests.get(line.strip(), auth=(username, password), stream=True)
+                try:
+                    fits_fname = http_header_disposition_fitsgz.match(url_request.headers['content-disposition']).groups()[0]
 
-                fits_fname = http_header_disposition.match(url_request.headers['content-disposition']).groups()[0]
-                assert url_request.headers['content-encoding'] == 'gzip'
-                assert url_request.headers['content-type'] == 'application/fits'
+                except AttributeError:
+                    try:
+                        download_fname = http_header_disposition_gz.match(url_request.headers['content-disposition']).groups()[0]
+                    except AttributeError:
+                        download_fname = http_header_disposition.match(url_request.headers['content-disposition']).groups()[0]
+                    finally:
+                        file_type = 'other'
+                else:
+                    file_type = 'fits'
 
-                #check if exists and move on if it does
-                if self.session.query(FITSFile).filter_by(fname=fits_fname).count() > 0:
-                    current_fits = self.session.query(FITSFile).filter_by(fname=fits_fname).one()
-                    assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
-                    logger.info('File {0} already exists - skip download'.format(fits_fname))
-                    continue
+
+                if file_type == 'fits':
+                    assert url_request.headers['content-encoding'] == 'gzip'
+                    assert url_request.headers['content-type'] == 'application/fits'
+
+                    #check if exists and move on if it does
+                    if self.session.query(FITSFile).filter_by(fname=fits_fname).count() > 0:
+                        current_fits = self.session.query(FITSFile).filter_by(fname=fits_fname).one()
+                        assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
+                        logger.info('File {0} already exists - skip download'.format(fits_fname))
+                        continue
 
                 logger.info("Downloading file {0} from url {1}".format(fits_fname, line.strip('\r\n')))
 
@@ -121,11 +136,12 @@ class BaseProject(object):
                         if chunk:
                             local_fh.write(chunk)
 
-                # Add to DB
-                current_fits = self.add_fits_file(os.path.join(raw_directory, fits_fname))
+                if file_type == 'fits':
+                    # Add to DB
+                    current_fits = self.add_fits_file(os.path.join(raw_directory, fits_fname))
 
-                if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
-                    raise IOError('File {0} MD5 mismatch with downloaded version'.format(fits_fname))
+                    if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
+                        raise IOError('File {0} MD5 mismatch with downloaded version'.format(fits_fname))
 
 
     def add_directory(self, directory, file_filter='*.fits'):
