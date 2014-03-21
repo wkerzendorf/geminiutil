@@ -104,7 +104,7 @@ class BaseProject(object):
             for line in cadc_fh:
                 url_request = requests.get(line.strip(), auth=(username, password), stream=True)
                 try:
-                    fits_fname = http_header_disposition_fitsgz.match(url_request.headers['content-disposition']).groups()[0]
+                    download_fname = http_header_disposition_fitsgz.match(url_request.headers['content-disposition']).groups()[0]
 
                 except AttributeError:
                     try:
@@ -116,32 +116,33 @@ class BaseProject(object):
                 else:
                     file_type = 'fits'
 
-
+                print file_type
+                
                 if file_type == 'fits':
                     assert url_request.headers['content-encoding'] == 'gzip'
                     assert url_request.headers['content-type'] == 'application/fits'
 
                     #check if exists and move on if it does
-                    if self.session.query(FITSFile).filter_by(fname=fits_fname).count() > 0:
-                        current_fits = self.session.query(FITSFile).filter_by(fname=fits_fname).one()
+                    if self.session.query(FITSFile).filter_by(fname=download_fname).count() > 0:
+                        current_fits = self.session.query(FITSFile).filter_by(fname=download_fname).one()
                         assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
-                        logger.info('File {0} already exists - skip download'.format(fits_fname))
+                        logger.info('File {0} already exists - skip download'.format(download_fname))
                         continue
 
-                logger.info("Downloading file {0} from url {1}".format(fits_fname, line.strip('\r\n')))
+                logger.info("Downloading file {0} from url {1}".format(download_fname, line.strip('\r\n')))
 
                 #writing to disk
-                with open(os.path.join(self.work_dir, raw_directory, fits_fname), 'w') as local_fh:
+                with open(os.path.join(self.work_dir, raw_directory, download_fname), 'w') as local_fh:
                     for chunk in url_request.iter_content(chunk_size):
                         if chunk:
                             local_fh.write(chunk)
 
                 if file_type == 'fits':
                     # Add to DB
-                    current_fits = self.add_fits_file(os.path.join(raw_directory, fits_fname))
+                    current_fits = self.add_fits_file(os.path.join(raw_directory, download_fname))
 
                     if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
-                        raise IOError('File {0} MD5 mismatch with downloaded version'.format(fits_fname))
+                        raise IOError('File {0} MD5 mismatch with downloaded version'.format(download_fname))
 
 
     def add_directory(self, directory, file_filter='*.fits'):
