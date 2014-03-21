@@ -53,12 +53,12 @@ class BaseProject(object):
     @property
     def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
-        return zip(*self.session.query(base_alchemy.ObservationClass.name).all())[0]
+        return [r.name for r in self.session.query(base_alchemy.ObservationClass.name)]
 
     @property
     def observation_types(self):
         """Names of observation types in the database (e.g., 'science')."""
-        return zip(*self.session.query(base_alchemy.ObservationType.name).all())[0]
+        return [r.name for r in self.session.query(base_alchemy.ObservationType.name)]
 
     def __dir__(self):
         return self.__dict__.keys() + list(self.observation_classes) + list(self.observation_types)
