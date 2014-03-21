@@ -12,7 +12,9 @@ import logging
 
 import re
 
-http_header_disposition = re.compile('^inline; filename=(.+\.fits)\.gz')
+http_header_disposition_fitsgz = re.compile('^inline; filename=(.+\.fits)\.gz')
+http_header_disposition_gz = re.compile('^inline; filename=(.+)\.gz')
+http_header_disposition = re.compile('^inline; filename=(.+)\.gz')
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +53,12 @@ class BaseProject(object):
     @property
     def observation_classes(self):
         """Names of observation classes in the database (e.g., 'daycal')."""
-        return zip(*self.session.query(base_alchemy.ObservationClass.name).all())[0]
+        return [r.name for r in self.session.query(base_alchemy.ObservationClass.name)]
 
     @property
     def observation_types(self):
         """Names of observation types in the database (e.g., 'science')."""
-        return zip(*self.session.query(base_alchemy.ObservationType.name).all())[0]
+        return [r.name for r in self.session.query(base_alchemy.ObservationType.name)]
 
     def __dir__(self):
         return self.__dict__.keys() + list(self.observation_classes) + list(self.observation_types)
@@ -101,31 +103,44 @@ class BaseProject(object):
         with open(fname) as cadc_fh:
             for line in cadc_fh:
                 url_request = requests.get(line.strip(), auth=(username, password), stream=True)
+                try:
+                    download_fname = http_header_disposition_fitsgz.match(url_request.headers['content-disposition']).groups()[0]
 
-                fits_fname = http_header_disposition.match(url_request.headers['content-disposition']).groups()[0]
-                assert url_request.headers['content-encoding'] == 'gzip'
-                assert url_request.headers['content-type'] == 'application/fits'
+                except AttributeError:
+                    try:
+                        download_fname = http_header_disposition_gz.match(url_request.headers['content-disposition']).groups()[0]
+                    except AttributeError:
+                        download_fname = http_header_disposition.match(url_request.headers['content-disposition']).groups()[0]
+                    finally:
+                        file_type = 'other'
+                else:
+                    file_type = 'fits'
 
-                #check if exists and move on if it does
-                if self.session.query(FITSFile).filter_by(fname=fits_fname).count() > 0:
-                    current_fits = self.session.query(FITSFile).filter_by(fname=fits_fname).one()
-                    assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
-                    logger.info('File {0} already exists - skip download'.format(fits_fname))
-                    continue
+                if file_type == 'fits':
+                    assert url_request.headers['content-encoding'] == 'gzip'
+                    assert url_request.headers['content-type'] == 'application/fits'
 
-                logger.info("Downloading file {0} from url {1}".format(fits_fname, line.strip('\r\n')))
+                    #check if exists and move on if it does
+                    if self.session.query(FITSFile).filter_by(fname=download_fname).count() > 0:
+                        current_fits = self.session.query(FITSFile).filter_by(fname=download_fname).one()
+                        assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
+                        logger.info('File {0} already exists - skip download'.format(download_fname))
+                        continue
+
+                logger.info("Downloading file {0} from url {1}".format(download_fname, line.strip('\r\n')))
 
                 #writing to disk
-                with open(os.path.join(self.work_dir, raw_directory, fits_fname), 'w') as local_fh:
+                with open(os.path.join(self.work_dir, raw_directory, download_fname), 'w') as local_fh:
                     for chunk in url_request.iter_content(chunk_size):
                         if chunk:
                             local_fh.write(chunk)
 
-                # Add to DB
-                current_fits = self.add_fits_file(os.path.join(raw_directory, fits_fname))
+                if file_type == 'fits':
+                    # Add to DB
+                    current_fits = self.add_fits_file(os.path.join(raw_directory, download_fname))
 
-                if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
-                    raise IOError('File {0} MD5 mismatch with downloaded version'.format(fits_fname))
+                    if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
+                        raise IOError('File {0} MD5 mismatch with downloaded version'.format(download_fname))
 
 
     def add_directory(self, directory, file_filter='*.fits'):
@@ -188,7 +203,7 @@ class BaseProject(object):
         date_obs_str = '%sT%s' % (fits_file.header['date-obs'], fits_file.header['time-obs'])
         date_obs = datetime.strptime(date_obs_str, '%Y-%m-%dT%H:%M:%S.%f')
 
-        current_raw_fits = raw_fits_class(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
+        current_raw_fits = self.raw_fits_class(date_obs, current_instrument.id, current_observation_block.id, current_observation_class.id, current_observation_type.id)
         current_raw_fits.id = fits_file.id
 
         self.session.add(current_raw_fits)
