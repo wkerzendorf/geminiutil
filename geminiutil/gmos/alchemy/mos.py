@@ -2,7 +2,8 @@ from sqlalchemy import Column, Table, ForeignKey
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 from sqlalchemy.orm import relationship
 
-from geminiutil.base import gemini_alchemy
+from geminiutil.base.alchemy import gemini_alchemy
+from geminiutil.base.alchemy.file_alchemy import AbstractFileTable
 
 # association table
 mos_point_source2mos_slice = Table('mos_point_source2point_source',
@@ -32,3 +33,36 @@ class MOSPointSource(gemini_alchemy.Base):
 
     def __repr__(self):
         return '<MosPointSouce id={0} priority={1} slit position={2:.4f}>'.format(self.id, self.priority, self.slit_position)
+
+
+
+
+
+mos_spectrum2mos_slice = Table('mos_spectrum2mos_point_source',
+                                      gemini_alchemy.Base.metadata,
+                                         Column('mos_spectrum_id',
+                                                Integer,
+                                                ForeignKey('mos_spectra.id')),
+                                         Column('mos_slice_id',
+                                                Integer,
+                                                ForeignKey('gmos_mos_slices.id')
+                                         ))
+
+class MOSSpectrum(AbstractFileTable):
+    """
+    This table holds Extracted Spectra from MOS Slices
+    """
+
+    __tablename__ = "mos_spectra"
+
+    id = Column(Integer, primary_key=True)
+    mos_point_source_id = Column(Integer, ForeignKey('mos_point_sources.id'))
+
+    slices = relationship('GMOSMOSSlice', secondary=mos_spectrum2mos_slice,
+                          backref='mos_spectra')
+
+    mos_point_source = relationship(MOSPointSource, uselist=False,
+                                    backref='mos_spectra')
+
+
+

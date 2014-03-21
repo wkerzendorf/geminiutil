@@ -1,4 +1,4 @@
-from geminiutil.base import gemini_alchemy
+from geminiutil.base.alchemy import gemini_alchemy
 
 
 from sqlalchemy import Column, Table, ForeignKey

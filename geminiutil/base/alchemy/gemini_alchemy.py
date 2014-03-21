@@ -8,30 +8,15 @@ from sqlalchemy import Column, ForeignKey
 from astropy.io import fits
 import logging
 import os
-import hashlib
+
 
 logger = logging.getLogger(__name__)
 
-#sqlalchemy types
+#
 
 
 
-
-from glob import glob
-import numpy as np
-import geminiutil
-import os
-
-def hashfile(afile, hasher, blocksize=65536):
-    buf = afile.read(blocksize)
-    while len(buf) > 0:
-        hasher.update(buf)
-        buf = afile.read(blocksize)
-    return hasher.hexdigest()
-
-Base = declarative_base()
-
-
+from geminiutil.base.alchemy.core import Base
 
 
 
@@ -53,104 +38,6 @@ class CategoryBaseClass(object):
             logger.debug('%s %s mentioned in %s found in database - returning existing object %s', cls.__name__ , category_keyword_value, fits_object.fname, category_object)
             return category_object
 
-
-class AbstractFileTable(Base):
-    __abstract__ = True
-
-    id = Column(Integer, primary_key=True)
-    fname = Column(String)
-    path = Column(String)
-    size = Column(Integer)
-    md5 = Column(String)
-
-    work_dir = ''
-
-    @classmethod
-    def from_file(cls, full_fname, use_abspath=False):
-        fname = os.path.basename(full_fname)
-        if use_abspath:
-            logger.warn('Using absolute paths is now discouraged - all files should be located in one workdirectory')
-            path = os.path.abspath(os.path.dirname(full_fname))
-        else:
-            path = os.path.dirname(full_fname)
-
-        filesize = os.path.getsize(full_fname)
-        md5_hash = hashfile(file(full_fname, 'rb'), hashlib.md5())
-
-        return cls(fname=fname, path=path, size=filesize, md5=md5_hash)
-
-
-    @property
-    def full_path(self):
-        return os.path.join(self.work_dir, self.path, self.fname)
-
-
-class AbstractCalibrationFileTable(AbstractFileTable):
-    __abstract__ = True
-
-    work_dir = os.path.join(geminiutil.__path__[0], 'data')
-
-class FITSFile(AbstractFileTable):
-    __tablename__ = 'fits_file'
-
-    extensions = Column(Integer)
-
-
-
-    @classmethod
-    def from_fits_file(cls, full_fname, use_abspath=False):
-        extensions = len(fits.open(full_fname))
-
-        fits_obj = cls.from_file(full_fname, use_abspath=use_abspath)
-        fits_obj.extensions = extensions
-        return fits_obj
-
-
-
-    @property
-    def fits_data(self):
-        return fits.open(self.full_path)
-
-    @property
-    def header(self):
-        return fits.getheader(self.full_path)
-
-    @property
-    def data(self):
-        return fits.getdata(self.full_path)
-
-
-    @property
-    def shape(self):
-        return self.header['naxis1'], self.header['naxis2']
-
-    @property
-    def children(self):
-        session = object_session(self)
-        return session.query(FITSFile).join(Operations, Operations.output_fits_id==FITSFile.id).filter(Operations.input_fits_id==self.id).all()
-
-
-    @property
-    def parents(self):
-        session = object_session(self)
-        return session.query(FITSFile).join(Operations, Operations.input_fits_id==FITSFile.id).filter(Operations.output_fits_id==self.id).all()
-
-
-    def __init__(self, fname, path, size, md5, extensions=None):
-        self.fname = fname
-        self.path = path
-        self.size = size
-        self.md5 = md5
-        self.extensions = extensions
-
-    def __repr__(self):
-        return "<FITS file ID {0:d} @ {1}>".format(self.id, self.full_path)
-
-# standard decorator style
-@event.listens_for(FITSFile, 'before_delete')
-def receive_before_delete(mapper, connection, target):
-    logger.info('Deleting FITS file {0}'.format(target.full_path))
-    os.remove(target.full_path)
 
 
 class Program(Base, CategoryBaseClass):
