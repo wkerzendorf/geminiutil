@@ -501,7 +501,7 @@ class GMOSMOSRawFITS(AbstractGMOSRawFITS):
         prepared_fits.writeto(prepared_full_path, clobber=True)
 
         # read it back in and add to database
-        fits_file = gemini_alchemy.FITSFile.from_fits_file(prepared_full_path)
+        fits_file = FITSFile.from_fits_file(prepared_full_path)
 
 
         session.add(fits_file)
