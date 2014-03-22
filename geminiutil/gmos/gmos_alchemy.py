@@ -4,37 +4,43 @@ import yaml
 
 import geminiutil
 
-from geminiutil.base import Base, Object
+from geminiutil.base import Base  # , Object
 
-from geminiutil.base.alchemy.gemini_alchemy import Instrument, ObservationType, \
-    ObservationClass, ObservationBlock
+from geminiutil.base.alchemy.gemini_alchemy import Instrument
+# , ObservationType, ObservationClass, ObservationBlock
 
-from geminiutil.base.alchemy.file_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable
+from geminiutil.base.alchemy.file_alchemy import (
+    FITSFile, AbstractFileTable, AbstractCalibrationFileTable)
 
 from .. import base
 
 from geminiutil.base.alchemy import gemini_alchemy
 
 from scipy import interpolate
+from scipy.ndimage import convolve1d
 from sqlalchemy import Column, ForeignKey
-from sqlalchemy import event
+# from sqlalchemy import event
 
 from sqlalchemy.orm import relationship, backref, object_session
 from sqlalchemy import func
 
 #sqlalchemy types
-from sqlalchemy import String, Integer, Float, DateTime, Boolean
+from sqlalchemy import String, Integer, Float  # DateTime, Boolean
 
+from geminiutil.gmos.util import wavecal
 from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
-from geminiutil.gmos.util.extraction import extract_spectrum
-from geminiutil.gmos.alchemy.base import AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError
+from geminiutil.gmos.util.extraction import extract_spectrum, extract_arc
+from geminiutil.gmos.util.estimate_disp import wavecal as estimate_disp_wavecal
+from geminiutil.gmos.alchemy.base import (
+    AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError)
+from geminiutil.gmos.alchemy.mos import MOSPointSource, MOSSpectrum
 
 from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 
 from astropy.utils import misc
 from astropy import units as u
 
-from astropy import time, table
+from astropy.table import Table
 
 from numpy.testing import assert_almost_equal
 import numpy as np
@@ -571,13 +577,16 @@ class GMOSMOSScienceSet(Base):
                                           shift_samples=shift_samples,
                                           fit_sample=fit_sample)
 
-
-    def calculate_slice_geometries_to_database(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5, force=False, point_source_priorities=[0, 1, 2]):
+    def calculate_slice_geometries_to_database(
+            self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5,
+            point_source_priorities=[0, 1, 2], force=False):
         """
-        Calculating the slice geometries (as done in calculate_slice_geometries)
+        Calculating the slice geometries and store in the database
+        (uses calculate_slice_geometries)
         """
         session = object_session(self)
-        if session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).count() > 0:
+        if (session.query(GMOSMOSSlice)
+            .filter_by(slice_set_id=self.id).count()) > 0:
             if not force:
                 raise GMOSDatabaseDuplicate('A slice set has already been created for this Science Set. To recalculate'
                                         ' and delete the existing slice set use force=True')
@@ -585,30 +594,100 @@ class GMOSMOSScienceSet(Base):
                 logger.warn('Deleting existing slice set and recreating new one')
                 session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
 
-
-        mdf_table = self.calculate_slice_geometries(shift_bounds=shift_bounds, shift_samples=shift_samples, fit_sample=fit_sample)
-
+        mdf_table = self.calculate_slice_geometries(
+            shift_bounds=shift_bounds, shift_samples=shift_samples,
+            fit_sample=fit_sample)
 
         slices = []
         for i, line in enumerate(mdf_table):
-            #adding slice
+            # adding slice
             source_id = int(line['ID'])
             priority = int(line['priority'])
 
             current_slice = GMOSMOSSlice(list_id=i, slice_set_id=self.id,
                                          lower_edge=line['slice_lower_edge'],
                                          upper_edge=line['slice_upper_edge'])
+            slices.append(current_slice)
+
             session.add(current_slice)
             session.commit()
 
             if priority in point_source_priorities:
-                current_slice._add_point_source(source_id, line['RA'], line['DEC'], current_slice.default_trace_position, priority)
+                current_slice._add_point_source(
+                    source_id, line['RA'], line['DEC'],
+                    current_slice.default_trace_position, priority)
 
         session.commit()
 
         return slices
 
+    def get_model_arc(self):
+        session = object_session(self)
+        daycals = {'B': {}, 'R': {}}
+        daycalfits = session.query(GMOSLongSlitArc).all()
+        daycalfits = [fil for fil in daycalfits
+                      if fil.raw.mask.name.startswith('0.5')]
+        for daycal in daycalfits:
+            daycals[daycal.raw.instrument_setup.grating.name[:1]][
+                daycal.raw.instrument_setup.grating_central_wavelength_value
+            ] = daycal.wave_cal.fname
 
+        instrument_setup = self.science.instrument_setup
+        grating_wavelength = instrument_setup.grating_central_wavelength_value
+
+        # find corresponding day arc
+        closest = min(daycals[instrument_setup.grating.name[:1]].keys(),
+                      key=lambda x: abs(grating_wavelength-x))
+        dayhdf5 = daycals[instrument_setup.grating.name[:1]][closest]
+        lines = wavecal.read(dayhdf5, path='lines')
+        dayarc = Table.read(dayhdf5, path='arc')
+        filt = np.array([0.15,0.85,0.0,0.06,.88,0.06,0.,0.85,0.15])
+        fs = convolve1d(dayarc['f'], filt, axis=0, mode='nearest')
+        model_wide_slit_arc = Table([dayarc['w'].flatten(), fs.flatten()],
+                                    names=['w','f'])
+        model_wide_slit_arc.sort('w')
+        model_wide_slit_arc.meta.update(lines.meta)
+        return model_wide_slit_arc
+
+    def extract_spectra_and_calibrate(self, priorities=[1], force=False):
+        """Extract point-source spectra and wavelength-calibrate them
+
+        Parameters
+        ----------
+        priorities : list
+            spectra are extracted if a slice has at least one object
+            with a priority in this list; default: [1]
+
+        The extracted spectra are stored in the database and written to disk
+        as <gmos_file>_slc<id>_src<id>.h5
+        """
+        model_arc = self.get_model_arc()
+        slices = [slc for slc in self.slices
+                  if any(src.priority in priorities
+                         for src in slc.mos_point_sources)]
+        session = object_session(self)
+        for slc in slices:
+            # extract all point sources from the slice
+            if(len(slc.mos_spectra) == len(slc.mos_point_sources) and
+               not force):
+                logger.info('Slice {} already extracted; skipping. '
+                            'Use force=True to override.'.format(slc))
+                continue
+            spectrum = slc.extract_and_calibrate_spectrum(model_arc)
+            for i, src in enumerate(slc.mos_point_sources):
+                # get spectra for individual point sources
+                src_spec = Table([spectrum['x']] +
+                                 [spectrum[col][:, i, :]
+                                  for col in ('source', 'error', 'sky', 'chi2',
+                                              'arc', 'wave')])
+                src_spec.meta.update(spectrum.meta)
+                # generate a spectrum object; this also writes the spectrum
+                # table to disk as <gmos_file>_slc<id>_src<id>.h5
+                data_file, spectrum_object = MOSSpectrum.from_table(
+                    src_spec, slc, src)
+                session.add_all([data_file, spectrum_object])
+
+        session.commit()
 
 
 class GMOSMOSSlice(Base):
@@ -621,13 +700,14 @@ class GMOSMOSSlice(Base):
     upper_edge = Column(Float)
 
     science_set = relationship(GMOSMOSScienceSet, backref='slices')
-    #mos_point_sources = relationship('MOSPointSource', secondary=mos_point_source2point_source, backref='slices')
-
-
+    # mos_point_sources = relationship('MOSPointSource',
+    #                                  secondary=mos_point_source2point_source,
+    #                                  backref='slices')
 
     @property
     def edges(self):
         return (self.lower_edge, self.upper_edge)
+
     @property
     def prepared_science_fits_data(self):
         return self.science_set.science.prepared.fits.fits_data
@@ -636,21 +716,21 @@ class GMOSMOSSlice(Base):
     def prepared_arc_fits_data(self):
         return self.science_set.mask_arc.prepared.fits.fits_data
 
-
     @property
     def science_instrument_setup(self):
         return self.science_set.science.instrument_setup
 
     @property
     def default_trace_position(self):
-        spec_pos_y = self.science_set.science.mask.table[self.list_id]['specpos_y'].astype(np.float64)
+        spec_pos_y = (self.science_set.science.mask
+                      .table[self.list_id]['specpos_y'].astype(np.float64))
         return spec_pos_y / self.science_instrument_setup.y_binning
 
     def __repr__(self):
         return "<GMOS MOS Slice id={0} edges={1})>".format(self.id, self.edges)
 
-
-    def _add_point_source(self, point_source_id, ra, dec, slit_position, priority):
+    def _add_point_source(self, point_source_id, ra, dec,
+                          slit_position, priority):
         """
         Adding a point source from the current mask table line
 
@@ -663,71 +743,119 @@ class GMOSMOSSlice(Base):
 
         Parameters
         ----------
-
         point_source_id: int
         ra: float
         dec: float
         slit_position: float
         priority: int
-
         """
 
         session = object_session(self)
 
         # adding point_source if not exists
-        if session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).count() == 0:
-            logger.info('New point source found (ID={0}). Adding to Database'.format(point_source_id))
-            current_point_source = gemini_alchemy.PointSource(id=point_source_id, ra=ra, dec=dec)
+        if session.query(gemini_alchemy.PointSource).filter_by(
+                id=point_source_id).count() == 0:
+            logger.info('New point source found (ID={0}). Adding to Database'
+                        .format(point_source_id))
+            current_point_source = gemini_alchemy.PointSource(
+                id=point_source_id, ra=ra, dec=dec)
             session.add(current_point_source)
             session.commit()
 
-
-            current_mos_point_source = MOSPointSource(id=current_point_source.id,
-                                                      slit_position=slit_position,
-                                                      priority=priority)
+            current_mos_point_source = MOSPointSource(
+                id=current_point_source.id, slit_position=slit_position,
+                priority=priority)
 
             session.add(current_mos_point_source)
             session.commit()
 
         else:
-            #ensuring that the ra, dec entries in the database are the same as for the current object
-            current_point_source = session.query(gemini_alchemy.PointSource).filter_by(id=point_source_id).one()
+            # ensure that the ra, dec entries in the database are the same as
+            # for the current object
+            current_point_source = (session.query(gemini_alchemy.PointSource)
+                                    .filter_by(id=point_source_id).one())
             assert_almost_equal(ra, current_point_source.ra)
             assert_almost_equal(dec, current_point_source.dec)
 
-            #ensuring that the priority, slit_position_entries in the database are the same as for the current object
-            current_mos_point_source = session.query(MOSPointSource).filter_by(id=point_source_id).one()
-
+            # ensure that the priority, slit_position_entries in the database
+            # are the same as for the current object
+            current_mos_point_source = (session.query(MOSPointSource)
+                                        .filter_by(id=point_source_id).one())
             assert current_mos_point_source.priority == priority
-            assert_almost_equal(current_mos_point_source.slit_position, slit_position)
+            assert_almost_equal(current_mos_point_source.slit_position,
+                                slit_position)
 
         current_mos_point_source.slices.append(self)
 
-
-
     def get_prepared_science_data(self):
         fits_data = self.prepared_science_fits_data
-        science_slice = slice(np.ceil(self.lower_edge).astype(int), np.ceil(self.upper_edge).astype(int))
-        science_slice_data = [fits_data[chip].data[science_slice, :] for chip in xrange(1, 4)]
+        science_slice = slice(np.ceil(self.lower_edge).astype(int),
+                              np.ceil(self.upper_edge).astype(int))
+        science_slice_data = [fits_data[chip].data[science_slice, :]
+                              for chip in xrange(1, 4)]
 
         return science_slice_data
 
     def get_prepared_arc_data(self):
         fits_data = self.prepared_arc_fits_data
-        arc_slice = slice(np.ceil(self.lower_edge).astype(int), np.ceil(self.upper_edge).astype(int))
-        arc_slice_data = [fits_data[chip].data[arc_slice, :] for chip in xrange(1, 4)]
+        arc_slice = slice(np.ceil(self.lower_edge).astype(int),
+                          np.ceil(self.upper_edge).astype(int))
+        arc_slice_data = [fits_data[chip].data[arc_slice, :]
+                          for chip in xrange(1, 4)]
 
         return arc_slice_data
 
-
     def get_read_noises(self):
-        return [amp.header['RDNOISE'] for amp in self.prepared_science_fits_data[1:]]
+        return [amp.header['RDNOISE']
+                for amp in self.prepared_science_fits_data[1:]]
 
-    def extract_point_source(self, tracepos=None, model_errors=1, ff_noise=0.03, skypol=0):
-        return extract_spectrum(self, tracepos=tracepos, model_errors=model_errors, ff_noise=ff_noise, skypol=skypol)
+    def extract_spectrum(self, tracepos=None, model_errors=1,
+                         ff_noise=0.03, skypol=0):
+        return extract_spectrum(self, tracepos=tracepos,
+                                model_errors=model_errors, ff_noise=ff_noise,
+                                skypol=skypol)
 
-    def wavelength_calibrate_slice(self):
-        pass
+    def extract_arc(self, extracted_spectrum):
+        return extract_arc(self, extracted_spectrum=extracted_spectrum)
+
+    def calibrate_arc(self, extracted_arc, model_arc):
+        instrument_setup = self.science_set.science.instrument_setup
+        grating_wavelength = (instrument_setup.grating_central_wavelength
+                              .to(u.AA).value)
+        anamorphic_factor = instrument_setup.anamorphic_factor
+
+        parguess = model_arc.meta['par']
+        refwave_arc = model_arc.meta['refwave']
+        xref0 = (parguess[0] -
+                 (grating_wavelength - refwave_arc) / parguess[3])
+        specpos_x = self.science_set.science.mask.table[
+            self.list_id]['specpos_x']
+        xrefguess = xref0 - specpos_x / anamorphic_factor
+        guess = np.hstack([xrefguess, parguess[1:]])
+        wave, refwave, par = estimate_disp_wavecal(
+            Table([extracted_arc['arc'], extracted_arc['x']],
+                  names=('f', 'x')),
+            model_arc, refwave_arc, guess)
+        extracted_arc['wave'] = wave
+        extracted_arc.meta['refwave'] = refwave
+        extracted_arc.meta['par'] = par
+        return extracted_arc
+
+    def extract_and_calibrate_spectrum(self, model_arc,
+                                       tracepos=None, model_errors=1,
+                                       ff_noise=0.03, skypol=0):
+        logger.info('Extracting and calibrating from {}'.format(self))
+        spectrum = self.extract_spectrum(tracepos=tracepos,
+                                         model_errors=model_errors,
+                                         ff_noise=ff_noise, skypol=skypol)
+        arc = self.extract_arc(spectrum)
+        arc = self.calibrate_arc(arc, model_arc)
+        spectrum['arc'] = arc['arc']
+        spectrum['wave'] = arc['wave']
+        spectrum.meta['refwave'] = arc.meta['refwave']
+        spectrum.meta['par'] = arc.meta['par']
+        return spectrum
+
 
 class GMOSArcLamp(AbstractCalibrationFileTable):
     __tablename__ = 'gmos_arc_lamp'
@@ -736,10 +864,11 @@ class GMOSArcLamp(AbstractCalibrationFileTable):
 
     def read_line_list(self):
         line_list = np.genfromtxt(self.full_path,
-                                  dtype=[('w','f8'), ('ion','a7'), ('strength','i4')],
+                                  dtype=[('w','f8'), ('ion','a7'),
+                                         ('strength','i4')],
                                   delimiter=[9, 7, 8])
 
-        return table.Table(line_list)
+        return Table(line_list)
 
     def __repr__(self):
         return "<GMOS Arc Lamp {0}>".format(self.name)
@@ -843,8 +972,3 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
     id = Column(Integer, ForeignKey('gmos_longslit_arc.id'), primary_key=True)
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
-
-
-
-
-from geminiutil.gmos.alchemy.mos import MOSPointSource

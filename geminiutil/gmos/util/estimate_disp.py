@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import numpy.polynomial.polynomial as poly
+from scipy.optimize import leastsq
 from scipy.special import erf
 from astropy.table import Table
 
@@ -231,3 +232,47 @@ def estimate_disp(arc, wref, xref_grid, disp_grid, comparison=None,
             return xrefbest, dwbest, shift
     else:
         return xrefbest, dwbest
+
+
+def wavecal(arc, comparison, refwave, guess):
+    """Get wavelength calibration by fitting model to arc."""
+    from wavecal import ThreeChipLineTable
+
+    xrefbest, dwbest, shift = estimate_disp(
+        Table([arc['x'], arc['f'][:,0,1]], names=('x', 'f')),
+        refwave, guess[0]+np.arange(-30, 30, 0.5),
+        guess[3]*np.linspace(0.97,1.03,31), comparison, full=True)
+
+    # found that shifting the reference wavelength generally gives a better
+    # fit than shifting the reference position.
+
+    guess2 = refwave - dwbest * (xrefbest - guess[0]), guess.copy()
+
+    fake_lines = ThreeChipLineTable(np.zeros(1), np.zeros(1), np.zeros(1),
+                                    refchip=1)
+
+    def selpar(guess):
+        return np.hstack([guess[0], guess[1][3:]])
+
+    def allpar(par):
+        return par[0], np.hstack([guess2[1][:3], par[1:]])
+
+    def residual(par, model, lines):
+        lines.meta['refwave'], lines.meta['par'] = allpar(par)
+        wguess = lines.fit(np.arange(arc['f'].shape[-1]).reshape(1,1,-1),
+                           arc['x'].reshape(-1,1,1))
+        mguess = np.interp(wguess, model['w'], model['f'])
+        pfit1, extra = poly.polyfit(mguess.flatten(), arc['f'].flatten(),
+                                    1, full=True)
+        # print('par={}, chi2={}'.format(par, extra[0]))
+        aguess = pfit1[0] + pfit1[1]*mguess
+        return (arc['f'] - aguess).flatten()
+
+    selparfit, cov = leastsq(residual, selpar(guess2),
+                             args=(comparison, fake_lines))
+
+    fake_lines.meta['refwave'], fake_lines.meta['par'] = allpar(selparfit)
+    wfit = fake_lines.fit(np.arange(3)[np.newaxis,:],
+                          arc['x'][:,np.newaxis]).reshape(arc['f'].shape)
+
+    return wfit, fake_lines.meta['refwave'], fake_lines.meta['par']
