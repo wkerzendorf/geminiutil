@@ -102,6 +102,7 @@ class AbstractFileTable(Base, DataPathMixin):
         event.listen(cls, 'before_delete', cls.remove_file_before_delete)
 
 
+
 class AbstractCalibrationFileTable(AbstractFileTable):
     __abstract__ = True
 
@@ -153,3 +154,6 @@ class FITSFile(AbstractFileTable):
         return "<FITS file ID {0:d} @ {1}>".format(self.id, self.full_path)
 
 FITSFile.register()
+
+class DataFile(AbstractFileTable, DataPathMixin):
+    __tablename__ = 'data_files'
