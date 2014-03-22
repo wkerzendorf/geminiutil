@@ -623,10 +623,11 @@ class GMOSMOSSlice(Base):
     science_set = relationship(GMOSMOSScienceSet, backref='slices')
     #mos_point_sources = relationship('MOSPointSource', secondary=mos_point_source2point_source, backref='slices')
 
-    def __repr__(self):
-        return "<GMOS MOS Slice lower_edge={0:.2f} upper_edge={1:.2f})>".format(self.lower_edge, self.upper_edge)
 
 
+    @property
+    def edges(self):
+        return (self.lower_edge, self.upper_edge)
     @property
     def prepared_science_fits_data(self):
         return self.science_set.science.prepared.fits.fits_data
@@ -644,6 +645,10 @@ class GMOSMOSSlice(Base):
     def default_trace_position(self):
         spec_pos_y = self.science_set.science.mask.table[self.list_id]['specpos_y'].astype(np.float64)
         return spec_pos_y / self.science_instrument_setup.y_binning
+
+    def __repr__(self):
+        return "<GMOS MOS Slice id={0} edges={1})>".format(self.id, self.edges)
+
 
     def _add_point_source(self, point_source_id, ra, dec, slit_position, priority):
         """

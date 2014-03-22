@@ -10,6 +10,9 @@ from geminiutil.base.alchemy.file_alchemy import AbstractFileTable, DataPathMixi
 
 import os
 
+from astropy import table
+from astropy import units as u
+
 logger = logging.getLogger(__name__)
 
 # association table
@@ -112,6 +115,15 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
         return data_file, spectrum
 
+    @property
+    def table(self):
+        return table.Table.read(self.data_file.full_path, path=self.hdf5_path, format='hdf5')
 
+    @property
+    def wavelength(self):
+        return self.table['wave'].T.flatten() * u.Angstrom
 
+    @property
+    def flux(self):
+        return self.table['src'].T.flatten()
 
