@@ -54,7 +54,7 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
     id = Column(Integer, ForeignKey('data_files.id'), primary_key=True)
     mos_point_source_id = Column(Integer, ForeignKey('mos_point_sources.id'))
-    slice_id = Column(Integer, ForeignKey('mos_slices.id'))
+    slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
 
     slice = relationship('GMOSMOSSlice', uselist=False,
                           backref='mos_spectra')
