@@ -254,6 +254,11 @@ class GMOSMOSInstrumentSetup(Base):
     grating_central_wavelength_value = Column(Float)
     grating_central_wavelength_unit = u.Unit('nm')
 
+    @property
+    def grating_central_wavelength(self):
+        return self.grating_central_wavelength_value *\
+               self.grating_central_wavelength_unit
+
     grating_tilt_value = Column(Float)
     grating_tilt_unit = u.Unit('degree')
 
