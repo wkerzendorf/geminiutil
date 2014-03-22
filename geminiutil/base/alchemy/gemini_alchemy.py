@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 
-from geminiutil.base.alchemy.core import Base
+from geminiutil.base.alchemy.base import Base
 
 
 

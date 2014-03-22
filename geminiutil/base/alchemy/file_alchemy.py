@@ -11,7 +11,7 @@ from sqlalchemy import Integer, String
 
 import geminiutil
 
-from geminiutil.base.alchemy.core import Base
+from geminiutil.base.alchemy.base import Base
 
 
 logger = logging.getLogger(__name__)

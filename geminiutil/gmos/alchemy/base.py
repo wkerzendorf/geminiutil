@@ -1,5 +1,5 @@
 from geminiutil.base.alchemy import gemini_alchemy
-
+from geminiutil.base.alchemy.file_alchemy import FITSFile
 
 from sqlalchemy import Column, Table, ForeignKey
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
@@ -36,7 +36,7 @@ class GMOSMask(gemini_alchemy.Base):
     name = Column(String)
     program_id = Column(Integer, ForeignKey('program.id'))
 
-    fits = relationship(gemini_alchemy.FITSFile)
+    fits = relationship(FITSFile)
 
     @misc.lazyproperty
     def table(self):
@@ -99,7 +99,7 @@ class AbstractGMOSRawFITS(gemini_alchemy.Base):
 
     @declared_attr
     def fits(cls):
-        return relationship(gemini_alchemy.FITSFile, uselist=False)
+        return relationship(FITSFile, uselist=False)
 
     @declared_attr
     def instrument(cls):
