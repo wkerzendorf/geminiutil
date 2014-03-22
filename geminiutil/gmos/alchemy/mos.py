@@ -101,7 +101,7 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
         full_fname = os.path.join(cls.work_dir, relative_path, fname)
 
-        table.write_hdf5(full_fname, path=cls.hdf5_path)
+        table.write(full_fname, path=cls.hdf5_path, format='hdf5')
 
         data_file = DataFile.from_file(os.path.join(relative_path, fname))
 
