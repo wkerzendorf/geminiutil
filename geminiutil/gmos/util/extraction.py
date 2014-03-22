@@ -6,14 +6,15 @@ import extract_psf.extract as extract
 
 def extract_spectrum(gmos_slice, tracepos=None,
                      model_errors=1, ff_noise=0.03,
-                     skypol=0):
+                     skypol=0, ibadlimit=99):
 
     scidata = np.array(gmos_slice.get_prepared_science_data())
     read_noise = np.array(gmos_slice.get_read_noises()).reshape(-1,1,1)
     if tracepos is None:
         tracepos = np.array([scidata.shape[1]/2. -
                              gmos_slice.default_trace_position])
-        print("Using tracepos={0}".format(tracepos))
+        if ibadlimit <= 5:
+            print("Using tracepos={0}".format(tracepos))
 
     #return scidata, read_noise, tracepos
 
@@ -27,7 +28,7 @@ def extract_spectrum(gmos_slice, tracepos=None,
          ntdiscard,ntbadl,ntbadh,
          nproblems) = extract.extract(scidata, tracepos, psf,
                                       e=error_estimate, skypol=skypol,
-                                      ibadlimit=5, squeeze_dims=False,
+                                      ibadlimit=ibadlimit, squeeze_dims=False,
                                       itesttype=101 if i < model_errors
                                       else 103)
         # set error source to test frame
@@ -72,9 +73,10 @@ def extract_arc(gmos_slice, extracted_spectrum):
     psf_offsets = (extracted_spectrum.meta['tracepos'] +
                    extracted_spectrum.meta['psfpar'][0])
     ix = np.round(psf_offsets).astype(np.int)
+    ix = np.minimum(np.maximum(ix, 0), arc.shape[1]-1)
     if ix.ndim == 1:
         ix = ix[np.newaxis,:]
-    (_, chi2, arcfit, ntbadl, ntbadh) = extract.fitsky(arc)
+    (_, chi2, arcfit, ntbadl, ntbadh) = extract.fitsky(arc, ibadlimit=99)
     arc = arcfit[(0,1,2),ix[:,(0,1,2)],:].transpose(2,0,1)
     arctab = Table([extracted_spectrum['x'], arc, chi2.T],
                    names=['x', 'arc', 'chi2'])

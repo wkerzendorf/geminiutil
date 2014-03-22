@@ -88,7 +88,8 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
         fname: str
             filename of the extracted spectrum (default None)
-            if None it automatically generats <raw_fits_fname>_slc<slc_id>_src<src_id>
+            if None it automatically generates
+            <raw_fits_fname>_slc<slc_id>_src<src_id>
 
         """
 
@@ -104,7 +105,8 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
         full_fname = os.path.join(cls.work_dir, relative_path, fname)
 
-        table.write(full_fname, path=cls.hdf5_path, format='hdf5')
+        table.write(full_fname, path=cls.hdf5_path, format='hdf5',
+                    overwrite=True)
 
         data_file = DataFile.from_file(os.path.join(relative_path, fname))
 
@@ -117,7 +119,8 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
     @property
     def table(self):
-        return table.Table.read(self.data_file.full_path, path=self.hdf5_path, format='hdf5')
+        return table.Table.read(self.data_file.full_path, path=self.hdf5_path,
+                                format='hdf5')
 
     @property
     def wavelength(self):
@@ -126,4 +129,3 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
     @property
     def flux(self):
         return self.table['src'].T.flatten()
-
