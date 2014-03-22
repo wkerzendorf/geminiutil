@@ -1,7 +1,9 @@
-from geminiutil.base.gemini_alchemy import Base, FITSFile, Instrument, Program, \
-    ObservationBlock, ObservationClass, ObservationType, DataPathMixin
+from geminiutil.base.alchemy.gemini_alchemy import Base, Instrument, Program, \
+    ObservationBlock, ObservationClass, ObservationType
 
-from geminiutil.base import gemini_alchemy as base_alchemy
+from geminiutil.base.alchemy.file_alchemy import DataPathMixin, FITSFile
+
+from geminiutil.base.alchemy import gemini_alchemy as base_alchemy
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

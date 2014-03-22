@@ -99,7 +99,7 @@ class AbstractFileTable(Base, DataPathMixin):
     @classmethod
     def register(cls):
         "Registering the deletion event"
-        event.list(cls, 'before_delete', cls.remove_file_before_delete)
+        event.listen(cls, 'before_delete', cls.remove_file_before_delete)
 
 
 class AbstractCalibrationFileTable(AbstractFileTable):

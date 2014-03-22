@@ -6,12 +6,14 @@ import geminiutil
 
 from geminiutil.base import Base, Object
 
-from geminiutil.base.gemini_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable, Instrument, ObservationType, \
+from geminiutil.base.alchemy.gemini_alchemy import Instrument, ObservationType, \
     ObservationClass, ObservationBlock
+
+from geminiutil.base.alchemy.file_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable,
 
 from .. import base
 
-from geminiutil.base import gemini_alchemy
+from geminiutil.base.alchemy import gemini_alchemy
 
 from scipy import interpolate
 from sqlalchemy import Column, ForeignKey
