@@ -251,6 +251,12 @@ class GMOSMOSInstrumentSetup(Base):
     grating_slit_wavelength_value = Column(Float)
     grating_slit_wavelength_unit = u.Unit('nm')
 
+
+    @property
+    def grating_slit_wavelength(self):
+        return self.grating_slit_wavelength_value *\
+               self.grating_slit_wavelength_unit
+
     grating_central_wavelength_value = Column(Float)
     grating_central_wavelength_unit = u.Unit('nm')
 
