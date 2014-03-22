@@ -9,7 +9,7 @@ from geminiutil.base import Base, Object
 from geminiutil.base.alchemy.gemini_alchemy import Instrument, ObservationType, \
     ObservationClass, ObservationBlock
 
-from geminiutil.base.alchemy.file_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable,
+from geminiutil.base.alchemy.file_alchemy import FITSFile, AbstractFileTable, AbstractCalibrationFileTable
 
 from .. import base
 
