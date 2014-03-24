@@ -128,4 +128,4 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
     @property
     def flux(self):
-        return self.table['src'].T.flatten()
+        return self.table['source'].T.flatten()
