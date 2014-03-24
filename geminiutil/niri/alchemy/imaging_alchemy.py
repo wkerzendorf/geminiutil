@@ -29,6 +29,20 @@ class NIRIImagingRawFits(AbstractGeminiRawFITS):
                             base.ObservationClass, base.ObservationType,
                             base.Instrument]
 
+
+    id = Column(Integer, ForeignKey('temporary_fits_files.id'), primary_key=True)
+
+    fits = relationship('TemporaryFITSFile', uselist=False)
+
+    def __repr__(self):
+        return '<niri id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'\
+            .format(self.id, self.fits.fname, self.observation_class.name,
+                    self.observation_type.name, self.object.name)
+
+
+
+
+
     @classmethod
     def verify_fits_class(cls, fname):
         """
@@ -57,13 +71,14 @@ class NIRIImagingRawFits(AbstractGeminiRawFITS):
 
         """
         data_file_object = DataFile.from_file(fname)
-        fits_object = TemporaryFITSTable()
+        fits_object = TemporaryFITSFile()
         fits_object.data_file = data_file_object
 
         session.add(fits_object)
         session.commit()
 
         niri_raw_image = cls()
+        niri_raw_image.fits = fits_object
         niri_raw_image.object = base.Object.from_fits_object(fits_object)
         niri_raw_image.program = base.Program.from_fits_object(fits_object)
         niri_raw_image.observation_block = base.ObservationBlock.from_fits_object(fits_object)
@@ -83,28 +98,31 @@ class NIRIImagingRawFits(AbstractGeminiRawFITS):
         return niri_raw_image
 
 
-class TemporaryFITSTable(Base):
-    __tablename__ = 'temporary_fits_table'
+class TemporaryFITSFile(Base):
+    __tablename__ = 'temporary_fits_files'
 
     id = Column(Integer, primary_key=True)
-    data_file_id = Column(Integer, ForeignKey('data_file.id'))
+    data_file_id = Column(Integer, ForeignKey('data_files.id'))
     extensions = Column(Integer)
 
     data_file = relationship('DataFile', uselist=False)
 
+    @property
+    def fname(self):
+        return self.data_file.fname
 
 
     @property
     def fits_data(self):
-        return fits.open(self.data_file.full_path)
+        return fits.open(self.data_file.full_path, ignore_missing_end=True)
 
     @property
     def header(self):
-        return fits.getheader(self.data_file.full_path)
+        return fits.getheader(self.data_file.full_path, ignore_missing_end=True)
 
     @property
     def data(self):
-        return fits.getdata(self.data_file.full_path)
+        return fits.getdata(self.data_file.full_path, ignore_missing_end=True)
 
 
     @property
@@ -113,4 +131,5 @@ class TemporaryFITSTable(Base):
 
 
     def __repr__(self):
-        return "<FITS file ID {0:d} @ {1}>".format(self.id, self.data_file.full_path)
+        return "<FITS file ID {0:d} @ {1}>".format(self.id,
+                                                   self.data_file.full_path)

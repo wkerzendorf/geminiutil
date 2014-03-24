@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 from geminiutil.base.alchemy.base import Base
 
 from geminiutil.base.alchemy.category_alchemy import ObservationType, \
-    ObservationClass, ObservationBlock, Instrument, Object
+    ObservationClass, ObservationBlock, Instrument, Object, Program
+
+from geminiutil.base.alchemy.file_alchemy import FITSFile
 
 class PointSource(Base):
     """
@@ -99,6 +101,9 @@ class AbstractGeminiRawFITS(Base):
 
 
     ###### RELATIONSHIPS #######
+    @declared_attr
+    def fits(cls):
+        return relationship(FITSFile, uselist=False)
 
     @declared_attr
     def instrument(cls):
@@ -118,4 +123,4 @@ class AbstractGeminiRawFITS(Base):
 
     @declared_attr
     def object(cls):
-        return relationship(gemini_alchemy.Object, uselist=False)
+        return relationship(Object, uselist=False)
