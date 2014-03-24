@@ -1,6 +1,7 @@
 from geminiutil.base.alchemy import gemini_alchemy
 from geminiutil.base.alchemy.file_alchemy import FITSFile
 
+
 from sqlalchemy import Column, Table, ForeignKey
 from sqlalchemy import String, Integer, Float, DateTime, Boolean
 from sqlalchemy.orm import relationship, object_session
@@ -57,34 +58,13 @@ class GMOSMask(gemini_alchemy.Base):
         self.name = name
         self.program_id = program_id
 
-class AbstractGMOSRawFITS(gemini_alchemy.Base):
+class AbstractGMOSRawFITS(gemini_alchemy.AbstractGeminiRawFITS):
+    """
+    abstract class for gmos raw fits frames with mask relations and so on
+
+    more info to be added
+    """
     __abstract__ = True
-
-    @declared_attr
-    def id(cls):
-        return Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
-
-
-
-    @declared_attr
-    def instrument_id(cls):
-        return Column(Integer, ForeignKey('instrument.id'))
-
-    @declared_attr
-    def observation_block_id(cls):
-        return Column(Integer, ForeignKey('observation_block.id'))
-
-    @declared_attr
-    def observation_class_id(cls):
-        return Column(Integer, ForeignKey('observation_class.id'))
-
-    @declared_attr
-    def observation_type_id(cls):
-        return Column(Integer, ForeignKey('observation_type.id'))
-
-    @declared_attr
-    def object_id(cls):
-        return Column(Integer, ForeignKey('object.id'))
 
     @declared_attr
     def mask_id(cls):
@@ -100,26 +80,6 @@ class AbstractGMOSRawFITS(gemini_alchemy.Base):
     @declared_attr
     def fits(cls):
         return relationship(FITSFile, uselist=False)
-
-    @declared_attr
-    def instrument(cls):
-        return relationship(gemini_alchemy.Instrument, uselist=False)
-
-    @declared_attr
-    def observation_block(cls):
-        return relationship(gemini_alchemy.ObservationBlock, uselist=False)
-
-    @declared_attr
-    def observation_class(cls):
-        return relationship(gemini_alchemy.ObservationClass, uselist=False)
-
-    @declared_attr
-    def observation_type(cls):
-        return relationship(gemini_alchemy.ObservationType, uselist=False)
-
-    @declared_attr
-    def object(cls):
-        return relationship(gemini_alchemy.Object, uselist=False)
 
     @declared_attr
     def mask(cls):
@@ -142,19 +102,6 @@ class AbstractGMOSRawFITS(gemini_alchemy.Base):
     @property
     def date_obs(self):
         return time.Time(self.mjd, scale='utc', format='mjd')
-
-    def __init__(self, mjd, instrument_id, observation_block_id, observation_class_id, observation_type_id,
-                 object_id, mask_id=None, instrument_setup_id=None, exclude=False):
-        self.mjd = mjd
-        self.instrument_id = instrument_id
-        self.observation_block_id = observation_block_id
-        self.observation_class_id = observation_class_id
-        self.observation_type_id = observation_type_id
-        self.exclude = exclude
-
-        self.mask_id = mask_id
-        self.object_id = object_id
-        self.instrument_setup_id = instrument_setup_id
 
     def __repr__(self):
         return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'.format(self.id,

@@ -2,99 +2,115 @@ import logging
 
 from astropy.io import fits
 
+from sqlalchemy import Column, ForeignKey
+from sqlalchemy import Integer
 from sqlalchemy.orm import relationship
 
 
 from geminiutil import base
+from geminiutil.base.alchemy.file_alchemy import DataFile
 from geminiutil.util import convert_camel_case2underscore
+from geminiutil.base.alchemy.gemini_alchemy import AbstractGeminiRawFITS
 
-
+from geminiutil.base.alchemy.base import Base
 
 logger = logging.getLogger(__name__)
 
+from astropy import time
 
 class NIRIClassifyError(ValueError):
     pass
 
-class NIRIImagingRawFits(Base):
 
-        __tablename__ = 'niri_imaging_raw_fits'
+class NIRIImagingRawFits(AbstractGeminiRawFITS):
+    __tablename__ = 'niri_imaging_raw_fits'
 
-        categories = [base.Object, base.Program, base.ObservationBlock,
-                                base.ObservationClass, base.ObservationType,
-                                base.Instrument]
+    categories = [base.Object, base.Program, base.ObservationBlock,
+                            base.ObservationClass, base.ObservationType,
+                            base.Instrument]
 
-        @classmethod
-        def initialize_table(cls):
-            for category in cls.categories:
-                relationship_name = convert_camel_case2underscore(category.__name__)
-                cls.__setattr__(relationship_name, relationship(category,
-                                                                uselist=False))
+    @classmethod
+    def verify_fits_class(cls, fname):
+        """
+        Class method to check if a FITS file matches the given class of FITS files
+        This is often done by requiring a numner of different keywords
 
-        @classmethod
-        def verify_fits_class(cls, fname):
-            """
-            Class method to check if a FITS file matches the given class of FITS files
-            This is often done by requiring a numner of different keywords
+        Parameters
+        ----------
 
-            Parameters
-            ----------
-
-            fname: str
-                FITS filename
-            """
-            required_keywords = [item.category_keyword for item in cls.categories] + ['date-obs']
-            fits_header = fits.getheader(fname)
-            if not all([keyword in fits_header
-                        for keyword in required_keywords]):
-                logger.debug("{0} is not a {1} fits file".format(fname, cls.__name__))
-                raise NIRIClassifyError
+        fname: str
+            FITS filename
+        """
+        required_keywords = [item.category_keyword for item in cls.categories] + ['date-obs']
+        fits_header = fits.getheader(fname)
+        if not all([keyword in fits_header
+                    for keyword in required_keywords]):
+            raise NIRIClassifyError(
+                "{0} is not a {1} fits file".format(fname, cls.__name__))
 
 
 
-        @classmethod
-        def from_fits_file(cls, fname, session):
-            """
-            generate a
+    @classmethod
+    def from_fits_file(cls, fname, session):
+        """
+        generate a
 
-            """
-            fits_object = base.FITSFile.from_file(fname)
-            session.add(fits_object)
-            session.commit()
-            return cls.from_fits_object(fits_object)
+        """
+        data_file_object = DataFile.from_file(fname)
+        fits_object = TemporaryFITSTable()
+        fits_object.data_file = data_file_object
 
-        @classmethod
-        def from_fits_object(cls, fits_object):
+        session.add(fits_object)
+        session.commit()
 
-            object = base.Object.from_fits_object(fits_file)
-            program = base.Program.from_fits_object(fits_file)
-            observation_block = base.ObservationBlock.from_fits_object(fits_file)
-            observation_class = base.ObservationClass.from_fits_object(fits_file)
-            observation_type = base.ObservationType.from_fits_object(fits_file)
-            instrument = base.Instrument.from_fits_object(fits_file)
+        niri_raw_image = cls()
+        niri_raw_image.object = base.Object.from_fits_object(fits_object)
+        niri_raw_image.program = base.Program.from_fits_object(fits_object)
+        niri_raw_image.observation_block = base.ObservationBlock.from_fits_object(fits_object)
+        niri_raw_image.observation_class = base.ObservationClass.from_fits_object(fits_object)
+        niri_raw_image.observation_type = base.ObservationType.from_fits_object(fits_object)
+        niri_raw_image.instrument = base.Instrument.from_fits_object(fits_object)
 
-        if len(fits_file.fits_data) == 4 or len(fits_file.fits_data) == 7:
-            instrument_setup_id = GMOSMOSInstrumentSetup.from_fits_object(
-                fits_file).id
-        else:
-            logger.warn('Unusual fits data with %d HDUs '
-                        '(expecting either 4 or 7)', len(fits_file.fits_data))
-            instrument_setup_id = None
 
-        date_obs_str = '%sT%s' % (fits_file.header['date-obs'],
-                                  fits_file.header['time-obs'])
-        mjd = time.Time(date_obs_str, scale='utc').mjd
+        date_obs_str = '{0}T{1}'.format(fits_object.header['date-obs'],
+                                        fits_object.header['time-obs'])
 
-        gmos_raw = self.raw_fits_class(
-            mjd=mjd, instrument_id=instrument.id,
-            observation_block_id=observation_block.id,
-            observation_class_id=observation_class.id,
-            observation_type_id=observation_type.id, object_id=object.id,
-            instrument_setup_id=instrument_setup_id)
+        niri_raw_image.mjd = time.Time(date_obs_str, scale='utc').mjd
 
-        gmos_raw.id = fits_file.id
+        session.add(niri_raw_image)
+        session.commit()
 
-        self.session.add(gmos_raw)
-        self.session.commit()
+        return niri_raw_image
 
-        return gmos_raw
+
+class TemporaryFITSTable(Base):
+    __tablename__ = 'temporary_fits_table'
+
+    id = Column(Integer, primary_key=True)
+    data_file_id = Column(Integer, ForeignKey('data_file.id'))
+    extensions = Column(Integer)
+
+    data_file = relationship('DataFile', uselist=False)
+
+
+
+    @property
+    def fits_data(self):
+        return fits.open(self.data_file.full_path)
+
+    @property
+    def header(self):
+        return fits.getheader(self.data_file.full_path)
+
+    @property
+    def data(self):
+        return fits.getdata(self.data_file.full_path)
+
+
+    @property
+    def shape(self):
+        return self.header['naxis1'], self.header['naxis2']
+
+
+    def __repr__(self):
+        return "<FITS file ID {0:d} @ {1}>".format(self.id, self.data_file.full_path)
