@@ -49,7 +49,7 @@ class GMOSProject(BaseProject):
         else:
             return self.__getattribute__(item)
 
-    def classify_added_fits(self, current_fits):
+    def classify_raw_fits(self, current_fits):
         """
         Classify added FITS objects
 
@@ -60,7 +60,7 @@ class GMOSProject(BaseProject):
             FITSFile object to classify
         """
         try:
-            fits_object = self.classify_gmos_raw_fits(current_fits)
+            self.classify_gmos_raw_fits(current_fits)
         except GMOSClassifyError:
             try:
                 self.classify_gmos_mask(current_fits)

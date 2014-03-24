@@ -1,154 +1,20 @@
-from sqlalchemy import String, Integer, Float, DateTime, Boolean
-from sqlalchemy import event
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, relationship, backref, object_session
+from sqlalchemy import String, Integer, Float
+
+from sqlalchemy.ext.declarative import declared_attr
+
+from sqlalchemy.orm import relationship, object_session
 from sqlalchemy import Column, ForeignKey
 
-from astropy.io import fits
 import logging
-import os
-
 
 logger = logging.getLogger(__name__)
 
-#
-
-
-
 from geminiutil.base.alchemy.base import Base
 
+from geminiutil.base.alchemy.category_alchemy import ObservationType, \
+    ObservationClass, ObservationBlock, Instrument, Object, Program
 
-
-class CategoryBaseClass(object):
-    category_keyword = None
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        category_keyword_value = fits_object.header[cls.category_keyword].lower().strip()
-        if session.query(cls).filter_by(name=category_keyword_value).count() == 0:
-            logger.info('%s %s mentioned in %s not found in database - adding', cls.__name__ , category_keyword_value, fits_object.fname)
-            new_category_object = cls(category_keyword_value)
-            session.add(new_category_object)
-            session.commit()
-            return new_category_object
-        else:
-            category_object = session.query(cls).filter_by(name=category_keyword_value).one()
-            logger.debug('%s %s mentioned in %s found in database - returning existing object %s', cls.__name__ , category_keyword_value, fits_object.fname, category_object)
-            return category_object
-
-
-
-class Program(Base, CategoryBaseClass):
-    __tablename__ = 'program'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String)
-
-    category_keyword = 'gemprgid'
-
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return '<Gemini Program %s>' % self.name
-
-
-class Object(Base, CategoryBaseClass):
-    __tablename__ = 'object'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    ra = Column(Float)
-    dec = Column(Float)
-    description = Column(String)
-
-    category_keyword = 'object'
-
-
-    def __init__(self, name, ra=None, dec=None, description=None):
-        self.name = name
-        self.ra = ra
-        self.dec = dec
-        self.description = description
-
-    def __repr__(self):
-        return '<Object %s>' % self.name
-
-
-class ObservationBlock(Base, CategoryBaseClass):
-    __tablename__ = 'observation_block'
-
-    id = Column(Integer, primary_key=True)
-    program_id = Column(Integer, ForeignKey('program.id'))
-    name = Column(String)
-    description = Column(String)
-
-    program = relationship('Program')
-
-    category_keyword = 'obsid'
-
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return '<Gemini Observation Block %s>' % self.name
-
-
-class ObservationType(Base, CategoryBaseClass):
-    __tablename__ = 'observation_type'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String)
-
-    category_keyword = 'obstype'
-
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return '<Gemini Observation Type %s>' % self.name
-
-
-class ObservationClass(Base, CategoryBaseClass):
-    __tablename__ = 'observation_class'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String)
-
-    category_keyword = 'obsclass'
-
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return '<Gemini Observation Class %s>' % self.name
-
-
-class Instrument(Base, CategoryBaseClass):
-    __tablename__ = 'instrument'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String)
-
-    category_keyword = 'instrume'
-
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-
-    def __repr__(self):
-        return "<Gemini Instrument %s>" % self.name
-
+from geminiutil.base.alchemy.file_alchemy import FITSFile
 
 class PointSource(Base):
     """
@@ -204,6 +70,57 @@ class WaveCalType(Base):
 
 
 
+class AbstractGeminiRawFITS(Base):
+    __abstract__ = True
 
 
+    @declared_attr
+    def id(cls):
+        return Column(Integer, ForeignKey('fits_file.id'), primary_key=True)
 
+
+    @declared_attr
+    def instrument_id(cls):
+        return Column(Integer, ForeignKey('instrument.id'))
+
+    @declared_attr
+    def observation_block_id(cls):
+        return Column(Integer, ForeignKey('observation_block.id'))
+
+    @declared_attr
+    def observation_class_id(cls):
+        return Column(Integer, ForeignKey('observation_class.id'))
+
+    @declared_attr
+    def observation_type_id(cls):
+        return Column(Integer, ForeignKey('observation_type.id'))
+
+    @declared_attr
+    def object_id(cls):
+        return Column(Integer, ForeignKey('object.id'))
+
+
+    ###### RELATIONSHIPS #######
+    @declared_attr
+    def fits(cls):
+        return relationship(FITSFile, uselist=False)
+
+    @declared_attr
+    def instrument(cls):
+        return relationship(Instrument, uselist=False)
+
+    @declared_attr
+    def observation_block(cls):
+        return relationship(ObservationBlock, uselist=False)
+
+    @declared_attr
+    def observation_class(cls):
+        return relationship(ObservationClass, uselist=False)
+
+    @declared_attr
+    def observation_type(cls):
+        return relationship(ObservationType, uselist=False)
+
+    @declared_attr
+    def object(cls):
+        return relationship(Object, uselist=False)

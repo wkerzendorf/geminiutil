@@ -151,8 +151,13 @@ class BaseProject(object):
         Adding directory to the da
         """
         for fname in sorted(glob(os.path.join(directory, file_filter))):
-            current_fits = self.add_fits_file(fname)
-            self.classify_added_fits(current_fits)
+            try:
+                current_fits = self.add_fits_file(fname)
+            except IOError:
+                logger.warning('FITS File {0} is damaged - skipping'.format(fname))
+                continue
+
+            self.classify_raw_fits(current_fits)
 
     def add_fits_file(self, fname):
         """
@@ -173,7 +178,7 @@ class BaseProject(object):
         return current_fits
 
 
-    def classify_added_fits(self, current_fits):
+    def classify_raw_fits(self, current_fits):
         fits_object = self.add_gemini_raw_fits(current_fits)
         return fits_object
 
