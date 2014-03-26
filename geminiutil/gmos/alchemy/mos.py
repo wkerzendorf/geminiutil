@@ -123,9 +123,17 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
                                 format='hdf5')
 
     @property
+    def bpm(self):
+        return self.table['error'].T.flatten() > 0
+
+    @property
     def wavelength(self):
-        return self.table['wave'].T.flatten() * u.Angstrom
+        wavelength = (self.table['wave'].T.flatten() * u.Angstrom)[self.bpm]
 
     @property
     def flux(self):
-        return self.table['source'].T.flatten()
+        return (self.table['source'].T.flatten())[self.bpm]
+
+    @property
+    def uncertainty(self):
+        return (self.table['error'].T.flatten())[self.bpm]
