@@ -579,7 +579,7 @@ class GMOSMOSScienceSet(Base):
 
     def calculate_slice_geometries_to_database(
             self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5,
-            point_source_priorities=[0, 1, 2], force=False):
+            point_source_priorities=[0, 1, 3], force=False):
         """
         Calculating the slice geometries and store in the database
         (uses calculate_slice_geometries)

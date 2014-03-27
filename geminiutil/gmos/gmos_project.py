@@ -32,7 +32,6 @@ class GMOSClassifyError(ValueError):
 
 class GMOSProject(BaseProject):
 
-
     def __getattr__(self, item):
         if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
             return self.session.query(self.raw_fits_class).join(ObservationType).\

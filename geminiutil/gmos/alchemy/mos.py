@@ -69,6 +69,8 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
     hdf5_path = 'spectrum'
 
+    user_mask = True
+
     @classmethod
     def from_table(cls, table, slice, mos_point_source, relative_path='spectra',
                    fname=None):
@@ -122,13 +124,16 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
         return table.Table.read(self.data_file.full_path, path=self.hdf5_path,
                                 format='hdf5')
 
+
     @property
     def bpm(self):
-        return self.table['error'].T.flatten() > 0
+        return (self.table['error'].T.flatten() > 0) & self.user_mask
+
+
 
     @property
     def wavelength(self):
-        wavelength = (self.table['wave'].T.flatten() * u.Angstrom)[self.bpm]
+        return (self.table['wave'].T.flatten() * u.Angstrom)[self.bpm]
 
     @property
     def flux(self):
