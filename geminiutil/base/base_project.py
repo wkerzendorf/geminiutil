@@ -66,6 +66,23 @@ class BaseProject(object):
     def __dir__(self):
         return self.__dict__.keys() + list(self.observation_classes) + list(self.observation_types)
 
+    def __getattr__(self, item):
+        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
+            return self.session.query(self.raw_fits_class).join(ObservationType).\
+                filter(ObservationType.name==item.replace('_query', ''))
+        elif item in self.observation_types:
+            return self.__getattr__(item+'_query').all()
+
+        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
+            return self.session.query(self.raw_fits_class).join(ObservationClass).\
+                filter(ObservationClass.name==item.replace('_query', ''))
+
+        elif item in self.observation_classes:
+            return self.__getattr__(item+'_query').all()
+        else:
+            return self.__getattribute__(item)
+
+
     def download_raw_fits(self, fname, username, password, raw_directory='raw', chunk_size=1024):
         """
         Download files from a "cadcUrlList.txt" into the database.

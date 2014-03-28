@@ -14,7 +14,10 @@ from geminiutil.base.alchemy.base import Base
 from geminiutil.base.alchemy.category_alchemy import ObservationType, \
     ObservationClass, ObservationBlock, Instrument, Object, Program
 
-from geminiutil.base.alchemy.file_alchemy import FITSFile
+from geminiutil.base.alchemy.file_alchemy import FITSFile, FITSClassifyError
+
+
+from astropy.io import fits
 
 class PointSource(Base):
     """
@@ -72,6 +75,26 @@ class WaveCalType(Base):
 
 class AbstractGeminiRawFITS(Base):
     __abstract__ = True
+
+
+    @classmethod
+    def verify_fits_class(cls, fname):
+        """
+        Class method to check if a FITS file matches the given class of FITS files
+        This is often done by requiring a numner of different keywords
+
+        Parameters
+        ----------
+
+        fname: str
+            FITS filename
+        """
+        required_keywords = [item.category_keyword for item in cls.categories] + ['date-obs']
+        fits_header = fits.getheader(fname)
+        if not all([keyword in fits_header
+                    for keyword in required_keywords]):
+            raise FITSClassifyError(
+                "{0} is not a {1} fits file".format(fname, cls.__name__))
 
 
     @declared_attr
