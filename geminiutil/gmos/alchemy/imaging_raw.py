@@ -13,6 +13,7 @@ from geminiutil.base.alchemy.file_alchemy import DataFile, TemporaryFITSFile
 from geminiutil.base.alchemy.gemini_alchemy import Instrument, Object, Program, \
     ObservationBlock, ObservationType, ObservationClass
 from geminiutil.gmos.alchemy.base import GMOSFilter, GMOSGrating
+from geminiutil.gmos.util import qmosaic, prepare_frame
 
 import logging
 
@@ -38,14 +39,20 @@ class GMOSImagingRawFITS(AbstractGeminiRawFITS):
 
     id = Column(Integer, ForeignKey('temporary_fits_files.id'), primary_key=True)
 
+    instrument_setup_id = Column(Integer,
+                                 ForeignKey('gmos_imaging_instrument_setup.id'))
+
     fits = relationship('TemporaryFITSFile', uselist=False)
+    instrument_setup = relationship('GMOSImagingInstrumentSetup')
 
     def __repr__(self):
         return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'\
             .format(self.id, self.fits.fname, self.observation_class.name,
                     self.observation_type.name, self.object.name)
 
-
+    def reduce(self):
+        prepared_frame = prepare_frame.prepare(self.fits.fits_data)
+        return qmosaic.qmosaic(*prepared_frame[1:4])
 
     @classmethod
     def from_fits_file(cls, fname, session):
