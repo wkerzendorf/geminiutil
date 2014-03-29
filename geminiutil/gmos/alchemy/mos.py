@@ -1,4 +1,3 @@
-
 import logging
 
 from sqlalchemy import Column, Table, ForeignKey
@@ -12,6 +11,8 @@ import os
 
 from astropy import table
 from astropy import units as u
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +138,8 @@ class MOSSpectrum(gemini_alchemy.Base, DataPathMixin):
 
     @property
     def flux(self):
-        return (self.table['source'].T.flatten())[self.bpm]
+        return (self.table['source'].T.flatten() * u.ct)[self.bpm]
 
     @property
     def uncertainty(self):
-        return (self.table['error'].T.flatten())[self.bpm]
+        return (self.table['error'].T.flatten() * u.ct)[self.bpm]
