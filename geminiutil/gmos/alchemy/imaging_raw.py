@@ -135,7 +135,9 @@ class GMOSImagingInstrumentSetup(Base):
 
 
     @classmethod
-    def from_fits_file(cls, fits_file, session, equivalency_threshold = 0.0001):
+    def from_fits_file(cls, fits_file, session,
+                       tilt_equivalency_threshold=0.001,
+                       wavelength_equivalency_threshold=0.0001):
         header = fits.getheader(fits_file)
 
         filter1 = GMOSFilter.from_keyword(header['filter1'], session)
@@ -151,18 +153,22 @@ class GMOSImagingInstrumentSetup(Base):
         grating_order = header['grorder']
 
 
-        instrument_setup_object = session.query(cls).filter(
+        #Checking if the same instrument setup already exists
+        instrument_setup_query = session.query(cls).filter(
             cls.filter1_id==filter1.id, cls.filter2_id==filter2.id,
             cls.grating_id==grating.id, cls.instrument_id==instrument.id,
-            (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
-                                                    / grating_central_wavelength) < equivalency_threshold,
-            (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
-                                                    / grating_slit_wavelength) < equivalency_threshold,
-            (func.abs(cls.grating_tilt_value - grating_tilt)
-                                                    / grating_tilt) < equivalency_threshold).first()
+            func.abs(cls.grating_central_wavelength_value -
+                     grating_central_wavelength)
+            < wavelength_equivalency_threshold,
+            func.abs(cls.grating_slit_wavelength_value -
+                      grating_slit_wavelength) <
+            wavelength_equivalency_threshold,
+            func.abs(cls.grating_tilt_value -
+                      grating_tilt) < tilt_equivalency_threshold)
+
+        instrument_setup_object = instrument_setup_query.first()
 
         if instrument_setup_object is None:
-
             instrument_setup_object = cls(
                 filter1_id=filter1.id,
                 filter2_id=filter2.id,
