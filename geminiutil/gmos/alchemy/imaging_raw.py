@@ -1,5 +1,5 @@
 from sqlalchemy import ForeignKey, Column
-from sqlalchemy import Integer, Float, func
+from sqlalchemy import Integer, Float, func, Table
 from sqlalchemy.orm import relationship
 
 
@@ -44,6 +44,11 @@ class GMOSImagingRawFITS(AbstractGeminiRawFITS):
 
     fits = relationship('TemporaryFITSFile', uselist=False)
     instrument_setup = relationship('GMOSImagingInstrumentSetup')
+    mjd = Column(Float)
+
+    @property
+    def datetime(self):
+        return time.Time(self.mjd, format='mjd', scale='utc').datetime
 
     def __repr__(self):
         return '<gmos id ={0:d} fits="{1}" class="{2}" type="{3}" object="{4}">'\
@@ -200,3 +205,24 @@ class GMOSImagingInstrumentSetup(Base):
         return "<GMOS MOS Instrument Setup ID=%s Filter1 %s Filter2 %s Grating %s Tilt %.2f central wave=%.2f %s>" % \
                 (self.id, self.filter1, self.filter2, self.grating, self.grating_tilt_value, self.grating_central_wavelength_value,
                 self.grating_central_wavelength_unit)
+
+"""
+collection2raw_image = Table(
+    'gmos_imaging_collection2raw_image', Base.metadata,
+    Column('gmos_imaging_science_set_id', Integer,
+           ForeignKey('gmos_imaging_science_set')),
+    Column('gmos_imaging_raw_fits_id', Integer,
+           ForeignKey('gmos_imaging_raw_fits.id')))
+
+class GMOSImagingCollection(Base):
+    __tablename__ = 'gmos_imaging_science_sets'
+
+    id = Column(Integer, primary_key=True)
+    raw_fits = relationship(GMOSImagingRawFITS, secondary=science_set2raw_image,
+                            backref='science_set')
+
+
+
+"""
+
+

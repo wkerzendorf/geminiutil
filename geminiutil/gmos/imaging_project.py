@@ -14,6 +14,9 @@ class GMOSImagingProject(GMOSProject):
                                              GMOSImagingRawFITS, echo=echo)
 
 
+
+
+
     def add_fits_file(self, fname):
         """
         Add FITS file to database
