@@ -1,36 +1,21 @@
-from sqlalchemy import String, Integer, Float
+import logging
 
+from sqlalchemy import String, Integer
 from sqlalchemy.ext.declarative import declared_attr
-
 from sqlalchemy.orm import relationship, object_session
 from sqlalchemy import Column, ForeignKey
-
-import logging
 
 logger = logging.getLogger(__name__)
 
 from geminiutil.base.alchemy.base import Base
 
 from geminiutil.base.alchemy.category_alchemy import ObservationType, \
-    ObservationClass, ObservationBlock, Instrument, Object, Program
+    ObservationClass, ObservationBlock, Instrument, Object
 
 from geminiutil.base.alchemy.file_alchemy import FITSFile, FITSClassifyError
 
 
 from astropy.io import fits
-
-class PointSource(Base):
-    """
-    Table describing a point source in the database. Currently only supports
-    name, ra, dec
-    """
-
-    __tablename__ = 'point_sources'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    ra = Column(Float)
-    dec = Column(Float)
 
 
 class Operations(Base):
@@ -60,18 +45,6 @@ class Operations(Base):
         self.output_fits_id = self.output_fits_object.id
         self.session.add(self)
         self.session.commit()
-
-class WaveCalType(Base):
-    __tablename__ = 'wave_cal_type'
-
-    #initialize with 0=guess, 1=arc, 2=sky
-
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String, default=None)
-
-
 
 class AbstractGeminiRawFITS(Base):
     __abstract__ = True
@@ -147,3 +120,4 @@ class AbstractGeminiRawFITS(Base):
     @declared_attr
     def object(cls):
         return relationship(Object, uselist=False)
+

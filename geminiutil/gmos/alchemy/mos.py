@@ -13,6 +13,7 @@ from astropy import table
 from astropy import units as u
 
 import numpy as np
+from geminiutil.base.alchemy.point_sources import PointSource
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class MOSPointSource(gemini_alchemy.Base):
     slit_position = Column(Float)
     priority = Column(Integer)
 
-    point_source = relationship(gemini_alchemy.PointSource, backref='mos_point_source')
+    point_source = relationship(PointSource, backref='mos_point_source')
 
     slices = relationship('GMOSMOSSlice', secondary=mos_point_source2mos_slice, backref='mos_point_sources')
 

@@ -1,9 +1,11 @@
 from .. import base
-from ..base import BaseProject, ObservationClass, ObservationType
+from ..base import BaseProject
 
-from geminiutil.base.alchemy.file_alchemy import AbstractFileTable
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
+from geminiutil.base.alchemy.category_alchemy import ObservationClass, \
+    ObservationType
+
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSFilter, GMOSGrating, \
+    GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
 
 from geminiutil.gmos.alchemy.base import GMOSMask
 

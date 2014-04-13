@@ -4,10 +4,10 @@ import yaml
 
 import geminiutil
 
-from geminiutil.base import Base  # , Object
+from geminiutil.base.alchemy.base import Base  # , Object
 
-from geminiutil.base.alchemy.gemini_alchemy import Instrument
-# , ObservationType, ObservationClass, ObservationBlock
+from geminiutil.base.alchemy.gemini_alchemy import Instrument, \
+    ObservationType, ObservationClass, ObservationBlock
 
 from geminiutil.base.alchemy.file_alchemy import (
     FITSFile, AbstractFileTable, AbstractCalibrationFileTable)
@@ -26,6 +26,7 @@ from sqlalchemy import func
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float  # DateTime, Boolean
+from geminiutil.base.alchemy.point_sources import PointSource
 
 from geminiutil.gmos.util import wavecal
 from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
@@ -209,7 +210,7 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating = relationship(GMOSGrating)
 
-    instrument = relationship(base.Instrument)
+    instrument = relationship(Instrument)
 
 
     @classmethod
@@ -228,7 +229,7 @@ class GMOSMOSInstrumentSetup(Base):
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
 
-        instrument = base.Instrument.from_fits_object(fits_object)
+        instrument = Instrument.from_fits_object(fits_object)
 
         instrument_setup_object = session.query(cls).filter(
             cls.filter1_id==filter1.id, cls.filter2_id==filter2.id,
@@ -665,11 +666,11 @@ class GMOSMOSSlice(Base):
         session = object_session(self)
 
         # adding point_source if not exists
-        if session.query(gemini_alchemy.PointSource).filter_by(
+        if session.query(PointSource).filter_by(
                 id=point_source_id).count() == 0:
             logger.info('New point source found (ID={0}). Adding to Database'
                         .format(point_source_id))
-            current_point_source = gemini_alchemy.PointSource(
+            current_point_source = PointSource(
                 id=point_source_id, ra=ra, dec=dec)
             session.add(current_point_source)
             session.commit()
@@ -684,7 +685,7 @@ class GMOSMOSSlice(Base):
         else:
             # ensure that the ra, dec entries in the database are the same as
             # for the current object
-            current_point_source = (session.query(gemini_alchemy.PointSource)
+            current_point_source = (session.query(PointSource)
                                     .filter_by(id=point_source_id).one())
             assert_almost_equal(ra, current_point_source.ra)
             assert_almost_equal(dec, current_point_source.dec)

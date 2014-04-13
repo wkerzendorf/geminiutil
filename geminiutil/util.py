@@ -77,7 +77,7 @@ def download_cadc_url(cadc_url, username, password, chunk_size=1024):
             if chunk:
                 local_fh.write(chunk)
 
-    if uncompressed_md5 == hashfile(open(download_fname), hashlib.md5()):
+    if uncompressed_md5 != hashfile(open(download_fname), hashlib.md5()):
         raise IOError('File {0} MD5 mismatch with downloaded version'.format(download_fname))
 
     return download_fname

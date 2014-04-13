@@ -8,10 +8,9 @@ from geminiutil.base.alchemy.base import Base
 
 from geminiutil.base.alchemy.file_alchemy import FITSClassifyError
 from geminiutil.base.alchemy.gemini_alchemy import AbstractGeminiRawFITS
-from geminiutil.base.alchemy import base as base_alchemy
 from geminiutil.base.alchemy.file_alchemy import DataFile, TemporaryFITSFile
-from geminiutil.base.alchemy.gemini_alchemy import Instrument, Object, Program, \
-    ObservationBlock, ObservationType, ObservationClass
+from geminiutil.base.alchemy.category_alchemy import Instrument, Object, \
+    Program, ObservationBlock, ObservationType, ObservationClass
 from geminiutil.gmos.alchemy.base import GMOSFilter, GMOSGrating
 from geminiutil.gmos.util import qmosaic, prepare_frame
 

@@ -1,4 +1,6 @@
-from geminiutil.base.alchemy.gemini_alchemy import Base, Instrument, Program, \
+from geminiutil.base.alchemy.gemini_alchemy import Base
+
+from geminiutil.base.alchemy.category_alchemy import Instrument, Program, \
     ObservationBlock, ObservationClass, ObservationType
 
 from geminiutil.base.alchemy.file_alchemy import DataPathMixin, FITSFile, DataFile, FITSClassifyError
