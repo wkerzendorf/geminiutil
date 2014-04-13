@@ -16,9 +16,11 @@ class PointSource(Base):
     ra = Column(Float)
     dec = Column(Float)
 
-    magnitudes_id = Column(Integer, ForeignKey('point_source_magnitudes.id'))
+    field_id = Column(Integer, ForeignKey('fields.id'))
 
-    magnitudes = relationship('PointSourceMagnitude')
+    field = relationship('Field', uselist=False, backref='point_sources')
+
+
 
 
 class PointSourceMagnitude(Base):
@@ -27,16 +29,33 @@ class PointSourceMagnitude(Base):
 
     id = Column(Integer, primary_key=True)
     magnitude = Column(Float)
-    point_source_id = Column(Integer)
-    band_id = Column(Integer, ForeignKey('magnitude_bands.id'))
+    point_source_id = Column(Integer, ForeignKey('point_sources.id'))
+    band_id = Column(Integer, ForeignKey('photometry_bands.id'))
+
+    point_source = relationship(PointSource, uselist=False, backref='magnitudes')
+    band = relationship('PhotometryBand', uselist=False)
+
+    def __repr__(self):
+        return "<Magnitude {0}={1:2f}>".format(self.band.name, self.magnitude)
 
 
-class MagnitudeBand(Base):
-    __tablename__ = 'magnitude_bands'
+class PhotometryBand(Base):
+    __tablename__ = 'photometry_bands'
 
     id = Column(Integer, primary_key=True)
-    short_name = Column(String)
+    name = Column(String)
     long_name = Column(String)
+
+
+    @classmethod
+    def from_name(cls, name, session):
+        if session.query(cls).filter_by(name=name).count()>0:
+            return session.query(cls).filter_by(name=name).one()
+        else:
+            new_photometry_band = cls(name=name)
+            session.add(new_photometry_band)
+            session.commit()
+            return new_photometry_band
 
 class Field(Base):
     __tablename__ = 'fields'
@@ -58,4 +77,5 @@ class Field(Base):
         else:
             new_field = cls(name=name)
             session.add(new_field)
+            session.commit()
             return new_field

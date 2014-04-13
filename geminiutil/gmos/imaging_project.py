@@ -6,6 +6,9 @@ from geminiutil.base.base_project import BaseProject
 
 from geminiutil.gmos.util.read_standard_fields import read_standard_star_db
 
+from geminiutil.base.alchemy.point_sources import Field, PointSourceMagnitude,\
+    PointSource, PhotometryBand
+
 import os
 
 default_configuration_dir = os.path.join(geminiutil.__path__[0],
@@ -41,12 +44,33 @@ class GMOSImagingProject(GMOSProject):
 
     def initialize_standard_stars(self):
         standard_star_db_fname = os.path.join(default_configuration_dir,
-                                              'gmosnlandolt.dat')
+                                              'standards', 'gmosnlandolt.dat')
         standard_star_db = read_standard_star_db(standard_star_db_fname)
 
-        for line in standard_star_db:
+        for id, line in standard_star_db.iterrows():
             print line
-        1/0
+            stds_data = line.to_dict()
+            name = stds_data.pop('name')
+            field_name = stds_data.pop('fields')
+            ra = stds_data.pop('ra')
+            dec = stds_data.pop('dec')
+
+            field_object = Field.from_name(field_name, self.session)
+            point_source_object = PointSource(name=name, ra=ra, dec=dec)
+            self.session.add(point_source_object)
+
+            for band in stds_data:
+                band_object = PhotometryBand.from_name(band, self.session)
+                magnitude_object = PointSourceMagnitude(magnitude=stds_data[band])
+                magnitude_object.band = band_object
+                point_source_object.magnitudes.append(magnitude_object)
+
+
+            point_source_object.field = field_object
+
+            self.session.commit()
+
+
             
     def initialize_database(self, configuration_dir=None):
         self.initialize_standard_stars()
