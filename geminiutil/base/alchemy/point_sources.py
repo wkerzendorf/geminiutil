@@ -20,6 +20,8 @@ class PointSource(Base):
 
     field = relationship('Field', uselist=False, backref='point_sources')
 
+    def __repr__(self):
+        return "<Point Source {0}>".format(self.name)
 
 
 
@@ -79,3 +81,6 @@ class Field(Base):
             session.add(new_field)
             session.commit()
             return new_field
+
+    def __repr__(self):
+        return "<Field {0}>".format(self.name)

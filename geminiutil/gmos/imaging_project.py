@@ -48,8 +48,7 @@ class GMOSImagingProject(GMOSProject):
         standard_star_db = read_standard_star_db(standard_star_db_fname)
 
         for id, line in standard_star_db.iterrows():
-            print line
-            stds_data = line.to_dict()
+            stds_data = line
             name = stds_data.pop('name')
             field_name = stds_data.pop('fields')
             ra = stds_data.pop('ra')
@@ -59,7 +58,7 @@ class GMOSImagingProject(GMOSProject):
             point_source_object = PointSource(name=name, ra=ra, dec=dec)
             self.session.add(point_source_object)
 
-            for band in stds_data:
+            for band in stds_data.keys():
                 band_object = PhotometryBand.from_name(band, self.session)
                 magnitude_object = PointSourceMagnitude(magnitude=stds_data[band])
                 magnitude_object.band = band_object

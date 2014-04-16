@@ -16,7 +16,7 @@ def read_standard_star_db(filename):
     standard_fields_raw = np.recfromtxt(filename,
                                      converters={1:convert_sexagesimal,
                                                  2:convert_sexagesimal},
-                                     usecols=[0, 1, 2, 3, 4, 5],
+                                     usecols=[0, 1, 2, 3, 4, 5, 6, 7],
                                      names=column_names)
     standard_fields = pd.DataFrame(standard_fields_raw)
 
