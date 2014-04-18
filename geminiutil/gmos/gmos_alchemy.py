@@ -65,6 +65,51 @@ grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorti
 import numpy as np
 
 
+from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
+from geminiutil.gmos.util.prepare_slices import fit_slice_y_distortion, \
+    calculate_slice_geometries_from_mdf
+from geminiutil.gmos.util.extraction import extract_spectrum
+
+class GMOSDatabaseDuplicate(Exception):
+    pass
+
+class GMOSNotPreparedError(Exception):
+    #raised if a prepared fits is needed but none found for certain tasks
+    pass
+
+class GMOSMask(Base):
+    __tablename__ = 'gmos_mask'
+
+
+    # GMOSMasks don't have the fits_id as the primary key anymore.
+    #The reason for this change is that for a longslit exposure there exists no mask exposure.
+
+    id = Column(Integer, primary_key=True)
+    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
+    name = Column(String)
+    program_id = Column(Integer, ForeignKey('program.id'))
+
+    fits = relationship(base.FITSFile)
+
+    @misc.lazyproperty
+    def table(self):
+        return table.Table(self.fits.fits_data[1].data)
+
+    @classmethod
+    def from_fits_object(cls, fits_object):
+        session = object_session(fits_object)
+        mask_name = fits_object.header['DATALAB'].lower().strip()
+        mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
+        mask_object = cls(mask_name, mask_program.id)
+        mask_object.fits_id = fits_object.id
+        return mask_object
+
+
+
+    def __init__(self, name, program_id):
+        self.name = name
+        self.program_id = program_id
+
 
 class GMOSDetector(Base):
     __tablename__ = 'gmos_detector'
@@ -571,19 +616,26 @@ class GMOSMOSScienceSet(Base):
 
 
 
-    def calculate_slice_geometries(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5):
+    def calculate_slice_geometries(self, method='Nelder-Mead',
+                                   slice_model_chip=2,
+                                   slice_model_slice=slice(None),
+                                   degree=5):
+
+        mdf_slice_edges = calculate_slice_geometries_from_mdf(self.science)
+        return fit_slice_y_distortion(self.flat, mdf_slice_edges, method=method,
+                                      slice_model_chip=slice_model_chip,
+                                      slice_model_slice=slice_model_slice,
+                                      degree=degree)
 
         return calculate_slice_geometries(self, shift_bounds=shift_bounds,
-                                          shift_samples=shift_samples,
-                                          fit_sample=fit_sample)
+                                          shift_samples=shift_samples,)
 
-    def calculate_slice_geometries_to_database(
-            self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5,
-            point_source_priorities=[0, 1, 3], force=False):
-        """
-        Calculating the slice geometries and store in the database
-        (uses calculate_slice_geometries)
-        """
+
+    def calculate_slice_geometries_to_database(self, method='Nelder-Mead',
+                                   slice_model_chip=2,
+                                   slice_model_slice=slice(None),
+                                   degree=5, force=False):
+
         session = object_session(self)
         if (session.query(GMOSMOSSlice)
             .filter_by(slice_set_id=self.id).count()) > 0:
@@ -594,15 +646,17 @@ class GMOSMOSScienceSet(Base):
                 logger.warn('Deleting existing slice set and recreating new one')
                 session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
 
-        mdf_table = self.calculate_slice_geometries(
-            shift_bounds=shift_bounds, shift_samples=shift_samples,
-            fit_sample=fit_sample)
+        mdf_table = self.science.mask.table
+        slice_edges = self.calculate_slice_geometries(method=method,
+                                      slice_model_chip=slice_model_chip,
+                                      slice_model_slice=slice_model_slice,
+                                      degree=degree)
 
         slices = []
         for i, line in enumerate(mdf_table):
-            # adding slice
-            source_id = int(line['ID'])
-            priority = int(line['priority'])
+            slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
+                                slice_set_id=self.id, lower_edge=slice_edges[0][i],
+                                upper_edge=slice_edges[1][i]))
 
             current_slice = GMOSMOSSlice(list_id=i, slice_set_id=self.id,
                                          lower_edge=line['slice_lower_edge'],
