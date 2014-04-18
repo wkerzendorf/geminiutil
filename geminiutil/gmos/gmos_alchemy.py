@@ -22,20 +22,17 @@ from sqlalchemy import Column, ForeignKey
 # from sqlalchemy import event
 
 from sqlalchemy.orm import relationship, backref, object_session
-from sqlalchemy import func
+from sqlalchemy import func, event
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float  # DateTime, Boolean
 
 from geminiutil.gmos.util import wavecal
-from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
 from geminiutil.gmos.util.extraction import extract_spectrum, extract_arc
 from geminiutil.gmos.util.estimate_disp import wavecal as estimate_disp_wavecal
 from geminiutil.gmos.alchemy.base import (
     AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError)
 from geminiutil.gmos.alchemy.mos import MOSPointSource, MOSSpectrum
-
-from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 
 from astropy.utils import misc
 from astropy import units as u
@@ -76,39 +73,6 @@ class GMOSDatabaseDuplicate(Exception):
 class GMOSNotPreparedError(Exception):
     #raised if a prepared fits is needed but none found for certain tasks
     pass
-
-class GMOSMask(Base):
-    __tablename__ = 'gmos_mask'
-
-
-    # GMOSMasks don't have the fits_id as the primary key anymore.
-    #The reason for this change is that for a longslit exposure there exists no mask exposure.
-
-    id = Column(Integer, primary_key=True)
-    fits_id = Column(Integer, ForeignKey('fits_file.id'), default=None)
-    name = Column(String)
-    program_id = Column(Integer, ForeignKey('program.id'))
-
-    fits = relationship(base.FITSFile)
-
-    @misc.lazyproperty
-    def table(self):
-        return table.Table(self.fits.fits_data[1].data)
-
-    @classmethod
-    def from_fits_object(cls, fits_object):
-        session = object_session(fits_object)
-        mask_name = fits_object.header['DATALAB'].lower().strip()
-        mask_program = session.query(base.Program).filter_by(name=fits_object.header['GEMPRGID'].lower().strip()).one()
-        mask_object = cls(mask_name, mask_program.id)
-        mask_object.fits_id = fits_object.id
-        return mask_object
-
-
-
-    def __init__(self, name, program_id):
-        self.name = name
-        self.program_id = program_id
 
 
 class GMOSDetector(Base):
@@ -627,14 +591,12 @@ class GMOSMOSScienceSet(Base):
                                       slice_model_slice=slice_model_slice,
                                       degree=degree)
 
-        return calculate_slice_geometries(self, shift_bounds=shift_bounds,
-                                          shift_samples=shift_samples,)
 
 
     def calculate_slice_geometries_to_database(self, method='Nelder-Mead',
                                    slice_model_chip=2,
                                    slice_model_slice=slice(None),
-                                   degree=5, force=False):
+                                   degree=5, point_source_priorities=[1,3], force=False):
 
         session = object_session(self)
         if (session.query(GMOSMOSSlice)
@@ -654,13 +616,13 @@ class GMOSMOSScienceSet(Base):
 
         slices = []
         for i, line in enumerate(mdf_table):
-            slices.append(GMOSMOSSlice(list_id=i, object_id=int(line['ID']), priority=int(line['priority']),
-                                slice_set_id=self.id, lower_edge=slice_edges[0][i],
-                                upper_edge=slice_edges[1][i]))
+            priority = int(line['priority'])
+            source_id = int(line['ID'])
 
             current_slice = GMOSMOSSlice(list_id=i, slice_set_id=self.id,
-                                         lower_edge=line['slice_lower_edge'],
-                                         upper_edge=line['slice_upper_edge'])
+                                         lower_edge=slice_edges[0][i],
+                                         upper_edge=slice_edges[1][i])
+
             slices.append(current_slice)
 
             session.add(current_slice)
@@ -682,6 +644,12 @@ class GMOSMOSScienceSet(Base):
         daycalfits = [fil for fil in daycalfits
                       if fil.raw.mask.name.startswith('0.5')]
         for daycal in daycalfits:
+            if daycal.wave_cal is None:
+                if daycal.prepared is None:
+                    daycal.raw.prepare_to_database()
+                daycal.longslit_calibrate_to_database()
+
+
             daycals[daycal.raw.instrument_setup.grating.name[:1]][
                 daycal.raw.instrument_setup.grating_central_wavelength_value
             ] = daycal.wave_cal.fname

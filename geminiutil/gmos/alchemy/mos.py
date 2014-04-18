@@ -39,7 +39,8 @@ class MOSPointSource(gemini_alchemy.Base):
 
     point_source = relationship(gemini_alchemy.PointSource, backref='mos_point_source')
 
-    slices = relationship('GMOSMOSSlice', secondary=mos_point_source2mos_slice, backref='mos_point_sources')
+    slices = relationship('GMOSMOSSlice', secondary=mos_point_source2mos_slice,
+                          backref='mos_point_sources', cascade='delete')
 
 
     def __repr__(self):
