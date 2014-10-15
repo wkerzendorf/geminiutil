@@ -1,5 +1,7 @@
+from geminiutil.base.alchemy.base import Base
 from geminiutil.base.alchemy import gemini_alchemy
-from geminiutil.base.alchemy.file_alchemy import FITSFile
+from geminiutil.base.alchemy.file_alchemy import FITSFile, \
+    AbstractCalibrationFileTable
 
 
 from sqlalchemy import Column, Table, ForeignKey
@@ -10,6 +12,7 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from astropy import time, table
 from astropy.utils import misc
+from astropy import units as u
 
 
 import logging
@@ -112,3 +115,100 @@ class AbstractGMOSRawFITS(gemini_alchemy.AbstractGeminiRawFITS):
 
 
 
+class GMOSFilter(AbstractCalibrationFileTable):
+    __tablename__ = 'gmos_filters'
+
+    name = Column(String)
+    wavelength_start_value = Column(Float)
+    wavelength_start_unit = Column(String)
+
+    wavelength_end_value = Column(Float)
+    wavelength_end_unit = Column(String)
+
+
+    @classmethod
+    def from_keyword(cls, filter_keyword, session):
+        if filter_keyword.startswith('open'):
+            return session.query(GMOSFilter).filter_by(name='open').one()
+        else:
+            return session.query(GMOSFilter).filter_by(name=filter_keyword).one()
+
+
+    @property
+    def wavelength_start(self):
+        return u.Quantity(self.wavelength_start_value, self.wavelength_start_unit)
+
+    @property
+    def wavelength_end(self):
+        return u.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
+
+    @misc.lazyproperty
+    def wavelength(self):
+        return np.loadtxt(self.full_path, usecols=(0,))
+
+    @misc.lazyproperty
+    def flux(self):
+        return np.loadtxt(self.full_path, usecols=(1,))
+
+
+    def __repr__(self):
+        return "<GMOS Filter %s>" % self.name
+
+    def __str__(self):
+        return self.name
+
+
+class GMOSGrating(Base):
+    __tablename__ = 'gmos_gratings'
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String)
+
+    ruling_density_value = Column(Float)
+    ruling_density_unit = u.Unit('1/mm') # lines/mm
+
+    blaze_wavelength_value = Column(Float)
+    blaze_wavelength_unit = u.Unit('nm')
+
+    R = Column(Float)
+
+    coverage_value = Column(Float)
+    coverage_unit = u.Unit('nm')
+
+    wavelength_start_value = Column(Float)
+    wavelength_start_unit = u.Unit('nm')
+
+    wavelength_end_value = Column(Float)
+    wavelength_end_unit = u.Unit('nm')
+
+    wavelength_offset_value = Column(Float)
+    wavelength_offset_unit = u.Unit('nm')
+
+    y_offset_value = Column(Float)
+    y_offset_unit = u.Unit('pix')
+
+    @classmethod
+    def from_keyword(cls, grating_keyword, session):
+        if grating_keyword.lower() == 'mirror':
+            return session.query(GMOSGrating).filter_by(name='mirror').one()
+        else:
+            return session.query(GMOSGrating).filter_by(
+                name=grating_keyword).one()
+
+
+
+    def __getattr__(self, item):
+        if item in ['ruling_density', 'blaze_wavelength', 'coverage', 'wavelength_start', 'wavelength_end',
+                    'wavelength_offset', 'y_offset']:
+            item_value = getattr(self, '%s_value' % item)
+            item_unit = getattr(self, '%s_unit' % item)
+            return u.Quantity(item_value, item_unit)
+        else:
+            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
+
+    def __repr__(self):
+        return "<GMOS Grating %s>" % self.name
+
+    def __str__(self):
+        return self.name

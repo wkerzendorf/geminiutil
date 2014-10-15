@@ -1,7 +1,9 @@
-from geminiutil.base.alchemy.gemini_alchemy import Base, Instrument, Program, \
+from geminiutil.base.alchemy.gemini_alchemy import Base
+
+from geminiutil.base.alchemy.category_alchemy import Instrument, Program, \
     ObservationBlock, ObservationClass, ObservationType
 
-from geminiutil.base.alchemy.file_alchemy import DataPathMixin, FITSFile
+from geminiutil.base.alchemy.file_alchemy import DataPathMixin, FITSFile, DataFile, FITSClassifyError
 
 from geminiutil.base.alchemy import gemini_alchemy as base_alchemy
 
@@ -66,6 +68,23 @@ class BaseProject(object):
     def __dir__(self):
         return self.__dict__.keys() + list(self.observation_classes) + list(self.observation_types)
 
+    def __getattr__(self, item):
+        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
+            return self.session.query(self.raw_fits_class).join(ObservationType).\
+                filter(ObservationType.name==item.replace('_query', ''))
+        elif item in self.observation_types:
+            return self.__getattr__(item+'_query').all()
+
+        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
+            return self.session.query(self.raw_fits_class).join(ObservationClass).\
+                filter(ObservationClass.name==item.replace('_query', ''))
+
+        elif item in self.observation_classes:
+            return self.__getattr__(item+'_query').all()
+        else:
+            return self.__getattribute__(item)
+
+
     def download_raw_fits(self, fname, username, password, raw_directory='raw', chunk_size=1024):
         """
         Download files from a "cadcUrlList.txt" into the database.
@@ -105,6 +124,7 @@ class BaseProject(object):
 
         with open(fname) as cadc_fh:
             for line in cadc_fh:
+                logger.info('Processing {0}'.format(line.strip()))
                 url_request = requests.get(line.strip(), auth=(username, password), stream=True)
                 try:
                     download_fname = http_header_disposition_fitsgz.match(url_request.headers['content-disposition']).groups()[0]
@@ -124,8 +144,8 @@ class BaseProject(object):
                     assert url_request.headers['content-type'] == 'application/fits'
 
                     #check if exists and move on if it does
-                    if self.session.query(FITSFile).filter_by(fname=download_fname).count() > 0:
-                        current_fits = self.session.query(FITSFile).filter_by(fname=download_fname).one()
+                    if self.session.query(DataFile).filter_by(fname=download_fname).count() > 0:
+                        current_fits = self.session.query(DataFile).filter_by(fname=download_fname).one()
                         assert url_request.headers['x-uncompressed-md5'] == current_fits.md5
                         logger.info('File {0} already exists - skip download'.format(download_fname))
                         continue
@@ -140,10 +160,13 @@ class BaseProject(object):
 
                 if file_type == 'fits':
                     # Add to DB
-                    current_fits = self.add_fits_file(os.path.join(raw_directory, download_fname))
-
-                    if url_request.headers['x-uncompressed-md5'] != current_fits.md5:
-                        raise IOError('File {0} MD5 mismatch with downloaded version'.format(download_fname))
+                    try:
+                        current_raw_fits = self.add_fits_file(os.path.join(raw_directory, download_fname))
+                    except FITSClassifyError:
+                        pass
+                    else:
+                        if url_request.headers['x-uncompressed-md5'] != current_raw_fits.fits.data_file.md5:
+                            raise IOError('File {0} MD5 mismatch with downloaded version'.format(download_fname))
 
 
     def add_directory(self, directory, file_filter='*.fits'):
@@ -152,12 +175,11 @@ class BaseProject(object):
         """
         for fname in sorted(glob(os.path.join(directory, file_filter))):
             try:
-                current_fits = self.add_fits_file(fname)
+                self.add_fits_file(fname)
             except IOError:
                 logger.warning('FITS File {0} is damaged - skipping'.format(fname))
                 continue
 
-            self.classify_raw_fits(current_fits)
 
     def add_fits_file(self, fname):
         """
@@ -175,7 +197,6 @@ class BaseProject(object):
         self.session.add(current_fits)
         self.session.commit()
 
-        return current_fits
 
 
     def classify_raw_fits(self, current_fits):

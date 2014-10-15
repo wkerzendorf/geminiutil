@@ -4,10 +4,10 @@ import yaml
 
 import geminiutil
 
-from geminiutil.base import Base  # , Object
+from geminiutil.base.alchemy.base import Base  # , Object
 
-from geminiutil.base.alchemy.gemini_alchemy import Instrument
-# , ObservationType, ObservationClass, ObservationBlock
+from geminiutil.base.alchemy.gemini_alchemy import Instrument, \
+    ObservationType, ObservationClass, ObservationBlock
 
 from geminiutil.base.alchemy.file_alchemy import (
     FITSFile, AbstractFileTable, AbstractCalibrationFileTable)
@@ -26,6 +26,7 @@ from sqlalchemy import func, event
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float  # DateTime, Boolean
+from geminiutil.base.alchemy.point_sources import PointSource
 
 from geminiutil.gmos.util import wavecal
 from geminiutil.gmos.util.extraction import extract_spectrum, extract_arc
@@ -159,89 +160,10 @@ class GMOSDetector(Base):
         self.y_binning, self.gain)
 
 
+from geminiutil.gmos.alchemy.base import GMOSGrating, GMOSFilter
 
 
 
-class GMOSFilter(AbstractCalibrationFileTable):
-    __tablename__ = 'gmos_filters'
-
-    name = Column(String)
-    wavelength_start_value = Column(Float)
-    wavelength_start_unit = Column(String)
-
-    wavelength_end_value = Column(Float)
-    wavelength_end_unit = Column(String)
-
-
-    @property
-    def wavelength_start(self):
-        return u.Quantity(self.wavelength_start_value, self.wavelength_start_unit)
-
-    @property
-    def wavelength_end(self):
-        return u.Quantity(self.wavelength_end_value, self.wavelength_end_unit)
-
-    @misc.lazyproperty
-    def wavelength(self):
-        return np.loadtxt(self.full_path, usecols=(0,))
-
-    @misc.lazyproperty
-    def flux(self):
-        return np.loadtxt(self.full_path, usecols=(1,))
-
-
-    def __repr__(self):
-        return "<GMOS Filter %s>" % self.name
-
-    def __str__(self):
-        return self.name
-
-
-class GMOSGrating(Base):
-    __tablename__ = 'gmos_gratings'
-
-    id = Column(Integer, primary_key=True)
-
-    name = Column(String)
-
-    ruling_density_value = Column(Float)
-    ruling_density_unit = u.Unit('1/mm') # lines/mm
-
-    blaze_wavelength_value = Column(Float)
-    blaze_wavelength_unit = u.Unit('nm')
-
-    R = Column(Float)
-
-    coverage_value = Column(Float)
-    coverage_unit = u.Unit('nm')
-
-    wavelength_start_value = Column(Float)
-    wavelength_start_unit = u.Unit('nm')
-
-    wavelength_end_value = Column(Float)
-    wavelength_end_unit = u.Unit('nm')
-
-    wavelength_offset_value = Column(Float)
-    wavelength_offset_unit = u.Unit('nm')
-
-    y_offset_value = Column(Float)
-    y_offset_unit = u.Unit('pix')
-
-
-    def __getattr__(self, item):
-        if item in ['ruling_density', 'blaze_wavelength', 'coverage', 'wavelength_start', 'wavelength_end',
-                    'wavelength_offset', 'y_offset']:
-            item_value = getattr(self, '%s_value' % item)
-            item_unit = getattr(self, '%s_unit' % item)
-            return u.Quantity(item_value, item_unit)
-        else:
-            raise AttributeError('%s has no attribute %s' % (self.__class__.__name__, item))
-
-    def __repr__(self):
-        return "<GMOS Grating %s>" % self.name
-
-    def __str__(self):
-        return self.name
 
 class GMOSMOSInstrumentSetup2Detector(Base):
     __tablename__ = 'gmos_mos_instrument_setup2gmosdetector'
@@ -297,31 +219,18 @@ class GMOSMOSInstrumentSetup(Base):
 
     grating = relationship(GMOSGrating)
 
-    instrument = relationship(base.Instrument)
+    instrument = relationship(Instrument)
 
 
     @classmethod
     def from_fits_object(cls, fits_object, equivalency_threshold = 0.0001):
         session = object_session(fits_object)
         header = fits_object.fits_data[0].header
-        filter1 = header['filter1']
-        filter2 = header['filter2']
+        filter1 = GMOSFilter.from_keyword(header['filter1'], session)
+        filter2 = GMOSFilter.from_keyword(header['filter2'], session)
 
-        if filter1.startswith('open'):
-            filter1_id = session.query(GMOSFilter).filter_by(name='open').one().id
-        else:
-            filter1_id = session.query(GMOSFilter).filter_by(name=filter1).one().id
+        grating = GMOSGrating.from_keyword(header['grating'], session)
 
-        if filter2.startswith('open'):
-            filter2_id = session.query(GMOSFilter).filter_by(name='open').one().id
-        else:
-            filter2_id = session.query(GMOSFilter).filter_by(name=filter2).one().id
-
-        grating = header['grating']
-        if grating.lower() == 'mirror':
-            grating_id = session.query(GMOSGrating).filter_by(name='mirror').one().id
-        else:
-            grating_id = session.query(GMOSGrating).filter_by(name=header['grating']).one().id
 
         grating_central_wavelength = header['centwave']
         grating_slit_wavelength = header['grwlen']
@@ -329,19 +238,23 @@ class GMOSMOSInstrumentSetup(Base):
         grating_tilt = header['grtilt']
         grating_order = header['grorder']
 
-        instrument_id = base.Instrument.from_fits_object(fits_object).id
+        instrument = Instrument.from_fits_object(fits_object)
 
-        instrument_setup_object = session.query(cls).filter(cls.filter1_id==filter1_id, cls.filter2_id==filter2_id,
-            cls.grating_id==grating_id, cls.instrument_id==instrument_id,
+        instrument_setup_object = session.query(cls).filter(
+            cls.filter1_id==filter1.id, cls.filter2_id==filter2.id,
+            cls.grating_id==grating.id, cls.instrument_id==instrument.id,
             (func.abs(cls.grating_central_wavelength_value - grating_central_wavelength)
                                                     / grating_central_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_slit_wavelength_value - grating_slit_wavelength)
                                                     / grating_slit_wavelength) < equivalency_threshold,
             (func.abs(cls.grating_tilt_value - grating_tilt)
                                                     / grating_tilt) < equivalency_threshold).all()
+
+
         if instrument_setup_object == []:
-            instrument_setup_object = cls(filter1_id, filter2_id, grating_id, grating_central_wavelength,
-                                          grating_slit_wavelength, grating_tilt, grating_order, instrument_id)
+
+            instrument_setup_object = cls(filter1.id, filter2.id, grating.id, grating_central_wavelength,
+                                          grating_slit_wavelength, grating_tilt, grating_order, instrument.id)
 
             session.add(instrument_setup_object)
             session.commit()
@@ -775,11 +688,11 @@ class GMOSMOSSlice(Base):
         session = object_session(self)
 
         # adding point_source if not exists
-        if session.query(gemini_alchemy.PointSource).filter_by(
+        if session.query(PointSource).filter_by(
                 id=point_source_id).count() == 0:
             logger.info('New point source found (ID={0}). Adding to Database'
                         .format(point_source_id))
-            current_point_source = gemini_alchemy.PointSource(
+            current_point_source = PointSource(
                 id=point_source_id, ra=ra, dec=dec)
             session.add(current_point_source)
             session.commit()
@@ -794,7 +707,7 @@ class GMOSMOSSlice(Base):
         else:
             # ensure that the ra, dec entries in the database are the same as
             # for the current object
-            current_point_source = (session.query(gemini_alchemy.PointSource)
+            current_point_source = (session.query(PointSource)
                                     .filter_by(id=point_source_id).one())
             assert_almost_equal(ra, current_point_source.ra)
             assert_almost_equal(dec, current_point_source.dec)

@@ -2,8 +2,8 @@ import os
 import logging
 import hashlib
 
-from sqlalchemy.orm import object_session
-from sqlalchemy import Column, event
+from sqlalchemy.orm import object_session, relationship
+from sqlalchemy import Column, event, ForeignKey
 
 from astropy.io import fits
 
@@ -12,29 +12,15 @@ from sqlalchemy import Integer, String
 import geminiutil
 
 from geminiutil.base.alchemy.base import Base
-
+from geminiutil.util import hashfile
 
 logger = logging.getLogger(__name__)
 
+class FITSClassifyError(ValueError):
+    pass
 
-def hashfile(afile, hasher, blocksize=65536):
-    """
-    Create MD5 hash out of open file
 
-    Parameters
-    ----------
 
-    afile: open file handle
-    hasher: hash object
-    blocksize: int
-        number of bytes to be read simultaneously
-
-    """
-    buf = afile.read(blocksize)
-    while len(buf) > 0:
-        hasher.update(buf)
-        buf = afile.read(blocksize)
-    return hasher.hexdigest()
 
 class DataPathMixin(object):
 
@@ -155,5 +141,42 @@ class FITSFile(AbstractFileTable):
 
 FITSFile.register()
 
+
 class DataFile(AbstractFileTable, DataPathMixin):
     __tablename__ = 'data_files'
+
+class TemporaryFITSFile(Base):
+    __tablename__ = 'temporary_fits_files'
+
+    id = Column(Integer, primary_key=True)
+    data_file_id = Column(Integer, ForeignKey('data_files.id'))
+    extensions = Column(Integer)
+
+    data_file = relationship('DataFile', uselist=False)
+
+    @property
+    def fname(self):
+        return self.data_file.fname
+
+
+    @property
+    def fits_data(self):
+        return fits.open(self.data_file.full_path, ignore_missing_end=True)
+
+    @property
+    def header(self):
+        return fits.getheader(self.data_file.full_path, ignore_missing_end=True)
+
+    @property
+    def data(self):
+        return fits.getdata(self.data_file.full_path, ignore_missing_end=True)
+
+
+    @property
+    def shape(self):
+        return self.header['naxis1'], self.header['naxis2']
+
+
+    def __repr__(self):
+        return "<FITS file ID {0:d} @ {1}>".format(self.id,
+                                                   self.data_file.full_path)

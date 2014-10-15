@@ -1,9 +1,11 @@
 from .. import base
-from ..base import BaseProject, ObservationClass, ObservationType
+from ..base import BaseProject
 
-from geminiutil.base.alchemy.file_alchemy import AbstractFileTable
-from .gmos_alchemy import GMOSMOSRawFITS, GMOSDetector, \
-    GMOSFilter, GMOSGrating, GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
+from geminiutil.base.alchemy.category_alchemy import ObservationClass, \
+    ObservationType
+
+from .gmos_alchemy import GMOSMOSRawFITS, GMOSFilter, GMOSGrating, \
+    GMOSMOSInstrumentSetup, GMOSMOSScienceSet, GMOSArcLamp, GMOSLongSlitArc
 
 from geminiutil.gmos.alchemy.base import GMOSMask
 
@@ -31,22 +33,6 @@ class GMOSClassifyError(ValueError):
     pass
 
 class GMOSProject(BaseProject):
-
-    def __getattr__(self, item):
-        if item.endswith('_query') and item.replace('_query', '') in self.observation_types:
-            return self.session.query(self.raw_fits_class).join(ObservationType).\
-                filter(ObservationType.name==item.replace('_query', ''))
-        elif item in self.observation_types:
-            return self.__getattr__(item+'_query').all()
-
-        elif item.endswith('_query') and item.replace('_query', '') in self.observation_classes:
-            return self.session.query(self.raw_fits_class).join(ObservationClass).\
-                filter(ObservationClass.name==item.replace('_query', ''))
-
-        elif item in self.observation_classes:
-            return self.__getattr__(item+'_query').all()
-        else:
-            return self.__getattribute__(item)
 
     def classify_raw_fits(self, current_fits):
         """

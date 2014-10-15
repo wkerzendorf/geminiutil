@@ -1,33 +1,21 @@
-from sqlalchemy import String, Integer, Float
+import logging
 
+from sqlalchemy import String, Integer
 from sqlalchemy.ext.declarative import declared_attr
-
 from sqlalchemy.orm import relationship, object_session
 from sqlalchemy import Column, ForeignKey
-
-import logging
 
 logger = logging.getLogger(__name__)
 
 from geminiutil.base.alchemy.base import Base
 
 from geminiutil.base.alchemy.category_alchemy import ObservationType, \
-    ObservationClass, ObservationBlock, Instrument, Object, Program
+    ObservationClass, ObservationBlock, Instrument, Object
 
-from geminiutil.base.alchemy.file_alchemy import FITSFile
+from geminiutil.base.alchemy.file_alchemy import FITSFile, FITSClassifyError
 
-class PointSource(Base):
-    """
-    Table describing a point source in the database. Currently only supports
-    name, ra, dec
-    """
 
-    __tablename__ = 'point_sources'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    ra = Column(Float)
-    dec = Column(Float)
+from astropy.io import fits
 
 
 class Operations(Base):
@@ -58,20 +46,28 @@ class Operations(Base):
         self.session.add(self)
         self.session.commit()
 
-class WaveCalType(Base):
-    __tablename__ = 'wave_cal_type'
-
-    #initialize with 0=guess, 1=arc, 2=sky
-
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String, default=None)
-
-
-
 class AbstractGeminiRawFITS(Base):
     __abstract__ = True
+
+
+    @classmethod
+    def verify_fits_class(cls, fname):
+        """
+        Class method to check if a FITS file matches the given class of FITS files
+        This is often done by requiring a numner of different keywords
+
+        Parameters
+        ----------
+
+        fname: str
+            FITS filename
+        """
+        required_keywords = [item.category_keyword for item in cls.categories] + ['date-obs']
+        fits_header = fits.getheader(fname)
+        if not all([keyword in fits_header
+                    for keyword in required_keywords]):
+            raise FITSClassifyError(
+                "{0} is not a {1} fits file".format(fname, cls.__name__))
 
 
     @declared_attr
@@ -124,3 +120,4 @@ class AbstractGeminiRawFITS(Base):
     @declared_attr
     def object(cls):
         return relationship(Object, uselist=False)
+

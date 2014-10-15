@@ -27,6 +27,9 @@ class CategoryBaseClass(object):
             logger.debug('%s %s mentioned in %s found in database - returning existing object %s', cls.__name__ , category_keyword_value, fits_object.fname, category_object)
             return category_object
 
+    @classmethod
+    def from_keyword(cls, category_keyword, session):
+        return session.query(cls).filter_by(name=category_keyword.lower()).one()
 
 
 class Program(Base, CategoryBaseClass):
