@@ -22,20 +22,17 @@ from sqlalchemy import Column, ForeignKey
 # from sqlalchemy import event
 
 from sqlalchemy.orm import relationship, backref, object_session
-from sqlalchemy import func
+from sqlalchemy import func, event
 
 #sqlalchemy types
 from sqlalchemy import String, Integer, Float  # DateTime, Boolean
 
 from geminiutil.gmos.util import wavecal
-from geminiutil.gmos.util.prepare_slices import calculate_slice_geometries
 from geminiutil.gmos.util.extraction import extract_spectrum, extract_arc
 from geminiutil.gmos.util.estimate_disp import wavecal as estimate_disp_wavecal
 from geminiutil.gmos.alchemy.base import (
     AbstractGMOSRawFITS, GMOSDatabaseDuplicate, GMOSNotPreparedError)
 from geminiutil.gmos.alchemy.mos import MOSPointSource, MOSSpectrum
-
-from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
 
 from astropy.utils import misc
 from astropy import units as u
@@ -64,6 +61,18 @@ grating_eq_sorting = np.argsort(grating_eq)
 grating_equation_interpolator = interpolate.interp1d(grating_eq[grating_eq_sorting], tilt[grating_eq_sorting])
 import numpy as np
 
+
+from geminiutil.gmos.gmos_prepare import GMOSPrepareFrame
+from geminiutil.gmos.util.prepare_slices import fit_slice_y_distortion, \
+    calculate_slice_geometries_from_mdf
+from geminiutil.gmos.util.extraction import extract_spectrum
+
+class GMOSDatabaseDuplicate(Exception):
+    pass
+
+class GMOSNotPreparedError(Exception):
+    #raised if a prepared fits is needed but none found for certain tasks
+    pass
 
 
 class GMOSDetector(Base):
@@ -571,19 +580,24 @@ class GMOSMOSScienceSet(Base):
 
 
 
-    def calculate_slice_geometries(self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5):
+    def calculate_slice_geometries(self, method='Nelder-Mead',
+                                   slice_model_chip=2,
+                                   slice_model_slice=slice(None),
+                                   degree=5):
 
-        return calculate_slice_geometries(self, shift_bounds=shift_bounds,
-                                          shift_samples=shift_samples,
-                                          fit_sample=fit_sample)
+        mdf_slice_edges = calculate_slice_geometries_from_mdf(self.science)
+        return fit_slice_y_distortion(self.flat, mdf_slice_edges, method=method,
+                                      slice_model_chip=slice_model_chip,
+                                      slice_model_slice=slice_model_slice,
+                                      degree=degree)
 
-    def calculate_slice_geometries_to_database(
-            self, shift_bounds=[-20, 20], shift_samples=100, fit_sample=5,
-            point_source_priorities=[0, 1, 3], force=False):
-        """
-        Calculating the slice geometries and store in the database
-        (uses calculate_slice_geometries)
-        """
+
+
+    def calculate_slice_geometries_to_database(self, method='Nelder-Mead',
+                                   slice_model_chip=2,
+                                   slice_model_slice=slice(None),
+                                   degree=5, point_source_priorities=[1,3], force=False):
+
         session = object_session(self)
         if (session.query(GMOSMOSSlice)
             .filter_by(slice_set_id=self.id).count()) > 0:
@@ -594,19 +608,21 @@ class GMOSMOSScienceSet(Base):
                 logger.warn('Deleting existing slice set and recreating new one')
                 session.query(GMOSMOSSlice).filter_by(slice_set_id=self.id).delete()
 
-        mdf_table = self.calculate_slice_geometries(
-            shift_bounds=shift_bounds, shift_samples=shift_samples,
-            fit_sample=fit_sample)
+        mdf_table = self.science.mask.table
+        slice_edges = self.calculate_slice_geometries(method=method,
+                                      slice_model_chip=slice_model_chip,
+                                      slice_model_slice=slice_model_slice,
+                                      degree=degree)
 
         slices = []
         for i, line in enumerate(mdf_table):
-            # adding slice
-            source_id = int(line['ID'])
             priority = int(line['priority'])
+            source_id = int(line['ID'])
 
             current_slice = GMOSMOSSlice(list_id=i, slice_set_id=self.id,
-                                         lower_edge=line['slice_lower_edge'],
-                                         upper_edge=line['slice_upper_edge'])
+                                         lower_edge=slice_edges[0][i],
+                                         upper_edge=slice_edges[1][i])
+
             slices.append(current_slice)
 
             session.add(current_slice)
@@ -628,6 +644,12 @@ class GMOSMOSScienceSet(Base):
         daycalfits = [fil for fil in daycalfits
                       if fil.raw.mask.name.startswith('0.5')]
         for daycal in daycalfits:
+            if daycal.wave_cal is None:
+                if daycal.prepared is None:
+                    daycal.raw.prepare_to_database()
+                daycal.longslit_calibrate_to_database()
+
+
             daycals[daycal.raw.instrument_setup.grating.name[:1]][
                 daycal.raw.instrument_setup.grating_central_wavelength_value
             ] = daycal.wave_cal.fname
@@ -972,3 +994,25 @@ class GMOSLongSlitArcWavelengthSolution(AbstractFileTable):
     id = Column(Integer, ForeignKey('gmos_longslit_arc.id'), primary_key=True)
 
     longslit_arc = relationship(GMOSLongSlitArc, uselist=False, backref=backref('wave_cal', uselist=False))
+
+
+# standard decorator style
+@event.listens_for(GMOSLongSlitArcWavelengthSolution, 'before_delete')
+def receive_before_delete(mapper, connection, target):
+    logger.info('Deleting WaveCal file {0}'.format(target.full_path))
+    os.remove(target.full_path)
+
+
+
+
+class GMOSMOSSliceWaveCal(Base):
+    __tablename__ = 'gmos_mos_slice_wavecal'
+
+    id = Column(Integer, primary_key=True)
+    slice_id = Column(Integer, ForeignKey('gmos_mos_slices.id'))
+    wave_cal_type_id = Column(Integer, ForeignKey('wave_cal_type.id'))
+    raw_fits_id = Column(Integer, ForeignKey('gmos_mos_raw_fits.id'))
+    list_id = Column(Integer)
+    model = Column(String)
+
+    slice = relationship(GMOSMOSSlice, backref='slice_wavecal')
