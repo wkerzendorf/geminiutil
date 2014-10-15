@@ -10,13 +10,10 @@ from sqlalchemy.orm import relationship, object_session
 
 from sqlalchemy.ext.declarative import declared_attr
 
-from astropy import time
+from astropy import time, table
 from astropy.utils import misc
 from astropy import units as u
 
-import os
-
-import numpy as np
 
 import logging
 
@@ -45,7 +42,7 @@ class GMOSMask(gemini_alchemy.Base):
 
     @misc.lazyproperty
     def table(self):
-        return self.fits.data
+        return table.Table(self.fits.fits_data[1].data)
 
     @classmethod
     def from_fits_object(cls, fits_object):
@@ -61,6 +58,8 @@ class GMOSMask(gemini_alchemy.Base):
     def __init__(self, name, program_id):
         self.name = name
         self.program_id = program_id
+
+
 
 class AbstractGMOSRawFITS(gemini_alchemy.AbstractGeminiRawFITS):
     """
