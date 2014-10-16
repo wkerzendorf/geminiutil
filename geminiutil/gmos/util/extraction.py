@@ -1,7 +1,12 @@
 import numpy as np
 from astropy.table import Table
 
-import extract_psf.extract as extract
+try:
+    import extract_psf.extract as extract
+except ImportError:
+    extract_psf_available = False
+else:
+    extract_psf_available = True
 
 
 def extract_spectrum(gmos_slice, tracepos=None,
